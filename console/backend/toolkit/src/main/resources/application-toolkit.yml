@@ -26,6 +26,7 @@ api:
     toolRpaUrl: ${TOOL_RPA_URL:http://127.0.0.1:17198}
     workflow: ${WORKFLOW_URL:http://127.0.0.1:7880}
     sparkDB: ${SPARK_DB_URL:http://127.0.0.1:7990}
+    sparkDBType: ${SPARK_DB_TYPE:postgresql}
     sparkDocUrl: https://chatdoc.xfyun.cn
     mcpUrlServer: http://127.0.0.1:port
     localModel: ${LOCAL_MODEL_URL:http://127.0.0.1:33778}

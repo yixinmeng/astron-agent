@@ -20,6 +20,7 @@ from memory.database.domain.entity.schema import set_search_path_by_schema
 from memory.database.domain.entity.views.http_resp import format_response
 from memory.database.exceptions.e import CustomException
 from memory.database.exceptions.error_code import CodeEnum
+from memory.database.repository.middleware.adapters import get_adapter
 from memory.database.repository.middleware.getters import get_session
 from sqlglot import exp
 from sqlglot.errors import ParseError
@@ -286,7 +287,8 @@ async def _validate_ddl_legality(ddl: str, uid: str, span_context: Any) -> Any:
         None if validation passes, format_response error object if validation fails
     """
     try:
-        parsed = sqlglot.parse_one(ddl, dialect="postgres")
+        dialect = get_adapter().get_sqlglot_dialect()
+        parsed = sqlglot.parse_one(ddl, dialect=dialect)
 
         # Collect table names and function names that need validation
         function_names = _collect_functions_names(parsed)
@@ -339,16 +341,18 @@ def _rebuild_ddl_from_ast(ddl: str, span_context: Span) -> str:
     try:
         span_context.add_info_event(f"rebuilding ddl: {ddl}")
 
-        # Parse using PostgreSQL dialect
-        parsed = sqlglot.parse_one(ddl, dialect="postgres", error_level="raise")
+        dialect = get_adapter().get_sqlglot_dialect()
+
+        # Parse using the configured dialect
+        parsed = sqlglot.parse_one(ddl, dialect=dialect, error_level="raise")
 
         if not parsed:
             span_context.add_error_event("Failed to parse DDL for reconstruction")
             return ""
 
-        # Rebuild SQL using PostgreSQL dialect
+        # Rebuild SQL using the configured dialect
         # This ensures the SQL is reconstructed from the AST, preventing SQL injection
-        safe_sql = parsed.sql(dialect="postgres", pretty=False)
+        safe_sql = parsed.sql(dialect=dialect, pretty=False)
 
         if not safe_sql or not safe_sql.strip():
             span_context.add_error_event("Failed to reconstruct DDL statement")
@@ -373,7 +377,7 @@ async def _execute_ddl_statements(
 ) -> None:
     """Execute DDL statements across all schemas."""
     for schema in schema_list:
-        span_context.add_info_event(f"set search path: SET search_path = '{schema[0]}'")
+        span_context.add_info_event(f"set search path: {schema[0]}")
         await set_search_path_by_schema(db, schema[0])
         for statement in ddls:
             try:
