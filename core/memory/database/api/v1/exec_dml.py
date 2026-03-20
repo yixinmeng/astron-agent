@@ -25,6 +25,7 @@ from memory.database.domain.entity.schema import set_search_path_by_schema
 from memory.database.domain.entity.views.http_resp import format_response
 from memory.database.exceptions.e import CustomException
 from memory.database.exceptions.error_code import CodeEnum
+from memory.database.repository.middleware.adapters import get_adapter
 from memory.database.repository.middleware.getters import get_session
 from sqlglot import exp, parse_one
 from sqlglot.expressions import Column, Literal
@@ -246,6 +247,7 @@ def _is_datetime_type(data_type: str) -> bool:
         "timetz",
         "time without time zone",
         "time with time zone",
+        "datetime",
     ]
     return any(dt in data_type_lower for dt in datetime_types)
 
@@ -372,7 +374,11 @@ def rewrite_dml_with_uid_and_limit(
     # Parameterize values in SQL statements
     params_dict = _parameterize_literals(parsed, literal_column_map, column_types)
 
-    return parsed.sql(dialect="postgres"), insert_ids, params_dict
+    return (
+        parsed.sql(dialect=get_adapter().get_sqlglot_dialect()),
+        insert_ids,
+        params_dict,
+    )
 
 
 def _dml_add_where(parsed: Any, tables: List[str], app_id: str, uid: str) -> None:
@@ -647,7 +653,8 @@ def _validate_name_pattern(names: list, name_type: str, span_context: Any) -> An
 
 async def _validate_dml_legality(dml: str, uid: str, span_context: Any) -> Any:
     try:
-        parsed = sqlglot.parse_one(dml, dialect="postgres")
+        dialect = get_adapter().get_sqlglot_dialect()
+        parsed = sqlglot.parse_one(dml, dialect=dialect)
 
         # Validate comparison operation nodes
         error_result = _validate_comparison_nodes(parsed, uid, span_context)
@@ -753,25 +760,21 @@ async def _get_table_column_types(
         (e.g., 'timestamp without time zone', 'character varying', etc.)
     """
     column_types: Dict[str, str] = {}
+    adapter = get_adapter()
     for table in tables:
-        sql = """
-            SELECT column_name, data_type, udt_name
-            FROM information_schema.columns
-            WHERE table_name = :table_name AND table_schema = :table_schema
-        """
+        sql = adapter.get_column_types_sql()
         result = await parse_and_exec_sql(
             db, sql, {"table_name": table, "table_schema": schema}
         )
         for row in result.fetchall():
             col_name = row[0]
-            # Standard data type, such as 'timestamp without time zone',
-            # 'character varying'
+            # Standard data type
             data_type = row[1]
-            # PostgreSQL specific type, such as 'timestamp', 'varchar'
-            udt_name = row[2]
+            # Database-specific type (udt_name for PG, COLUMN_TYPE for MySQL)
+            specific_type = row[2]
             key = f"{table}.{col_name}"
-            # Use udt_name for more accuracy, use data_type if empty
-            column_types[key] = udt_name if udt_name else data_type
+            # Use specific type for more accuracy, use data_type if empty
+            column_types[key] = specific_type if specific_type else data_type
     return column_types
 
 
@@ -1017,7 +1020,7 @@ async def _dml_split(
 
         result = await parse_and_exec_sql(
             db,
-            "SELECT tablename FROM pg_tables WHERE schemaname = :schema",
+            get_adapter().list_tables_sql(),
             {"schema": schema},
         )
         valid_tables = {row[0] for row in result.fetchall()}
