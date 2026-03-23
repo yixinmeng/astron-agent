@@ -17,12 +17,14 @@ from memory.database.api.v1.exec_dml import (
     _collect_functions_names,
     _collect_insert_keys,
     _collect_update_keys,
+    _convert_value_if_boolean,
     _convert_value_if_datetime,
     _dml_add_where,
     _dml_insert_add_params,
     _dml_split,
     _exec_dml_sql,
     _extract_table_ref,
+    _is_boolean_type,
     _is_datetime_type,
     _is_numeric_value,
     _map_where_literals_recursive,
@@ -1095,6 +1097,59 @@ def test_convert_value_if_datetime_non_datetime_column() -> None:
         "2025-01-15 10:30:00", 42, literal_column_map, column_types
     )
     assert result == "2025-01-15 10:30:00"
+
+
+# ---------------------------------------------------------------------------
+# _is_boolean_type and _convert_value_if_boolean tests
+# ---------------------------------------------------------------------------
+
+
+def test_is_boolean_type_boolean() -> None:
+    """'boolean' and 'bool' are boolean types."""
+    assert _is_boolean_type("boolean") is True
+    assert _is_boolean_type("bool") is True
+    assert _is_boolean_type("BOOLEAN") is True
+
+
+def test_is_boolean_type_tinyint() -> None:
+    """MySQL tinyint(1) and tinyint are boolean types."""
+    assert _is_boolean_type("tinyint(1)") is True
+    assert _is_boolean_type("tinyint") is True
+
+
+def test_is_boolean_type_non_boolean() -> None:
+    """Varchar and int are not boolean types."""
+    assert _is_boolean_type("varchar") is False
+    assert _is_boolean_type("int") is False
+    assert _is_boolean_type("") is False
+
+
+def test_convert_value_if_boolean_true() -> None:
+    """'true' string converts to True for boolean column."""
+    literal_column_map = {42: "t.bbl"}
+    column_types = {"t.bbl": "boolean"}
+    result = _convert_value_if_boolean("true", 42, literal_column_map, column_types)
+    assert result is True
+    result = _convert_value_if_boolean("TRUE", 42, literal_column_map, column_types)
+    assert result is True
+
+
+def test_convert_value_if_boolean_false() -> None:
+    """'false' string converts to False for boolean column."""
+    literal_column_map = {42: "t.bbl"}
+    column_types = {"t.bbl": "tinyint(1)"}
+    result = _convert_value_if_boolean("false", 42, literal_column_map, column_types)
+    assert result is False
+    result = _convert_value_if_boolean("FALSE", 42, literal_column_map, column_types)
+    assert result is False
+
+
+def test_convert_value_if_boolean_non_boolean_column() -> None:
+    """Non-boolean column returns original value."""
+    literal_column_map = {42: "t.name"}
+    column_types = {"t.name": "varchar"}
+    result = _convert_value_if_boolean("false", 42, literal_column_map, column_types)
+    assert result == "false"
 
 
 # ---------------------------------------------------------------------------

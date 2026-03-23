@@ -281,6 +281,36 @@ def _is_numeric_value(value: Any) -> bool:
     )
 
 
+def _is_boolean_type(column_type: str) -> bool:
+    """Check if column type is boolean (MySQL tinyint(1)/boolean, PostgreSQL bool)."""
+    if not column_type:
+        return False
+    ct = column_type.lower()
+    return (
+        "boolean" in ct
+        or ct == "bool"
+        or ct.startswith("tinyint(1)")
+        or ct == "tinyint"
+    )
+
+
+def _convert_value_if_boolean(
+    value: str,
+    node_id: int,
+    literal_column_map: Dict[int, str],
+    column_types: Dict[str, str],
+) -> Union[str, bool]:
+    """Convert 'true'/'false' string to bool for boolean columns (MySQL compatibility)."""
+    col_key = literal_column_map.get(node_id)
+    if not col_key or not _is_boolean_type(column_types.get(col_key, "")):
+        return value
+    if value.lower() == "true":
+        return True
+    if value.lower() == "false":
+        return False
+    return value
+
+
 def _parameterize_literals(
     parsed: Any,
     literal_column_map: Dict[int, str],
@@ -309,12 +339,16 @@ def _parameterize_literals(
         if not isinstance(value, str):
             continue
 
-        # Convert value to datetime if needed
-        converted_value: Union[str, datetime.datetime] = value
+        # Convert value to datetime or boolean if needed (MySQL compatibility)
+        converted_value: Union[str, datetime.datetime, bool] = value
         if column_types:
             converted_value = _convert_value_if_datetime(
                 value, id(node), literal_column_map, column_types
             )
+            if isinstance(converted_value, str):
+                converted_value = _convert_value_if_boolean(
+                    converted_value, id(node), literal_column_map, column_types
+                )
 
         # Generate unique parameter name and replace literal with placeholder
         param_name = f"param_{len(params_dict)}"

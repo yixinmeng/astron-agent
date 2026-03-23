@@ -687,7 +687,7 @@ public class DatabaseService extends ServiceImpl<DbInfoMapper, DbInfo> {
                         UserInfoManagerHandler.getUserId(),
                         SpaceInfoUtil.getSpaceId(),
                         dbInfo.getDbId(),
-                        DBOperateEnum.UPDATE.getCode(),
+                        data.getOperateType(),
                         dbTableOperateDto.getExecDev());
 
                 // Simple batch yielding can be done here (e.g., sleep 1ms every BATCH items) to prevent
