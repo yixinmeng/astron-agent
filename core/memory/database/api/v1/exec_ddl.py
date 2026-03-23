@@ -8,6 +8,7 @@ import sqlglot
 from common.otlp.trace.span import Span
 from common.service import get_otlp_metric_service, get_otlp_span_service
 from fastapi import APIRouter, Depends
+from loguru import logger
 from memory.database.api.schemas.exec_ddl_types import ExecDDLInput
 from memory.database.api.v1.common import (
     check_database_exists_by_did_uid,
@@ -53,7 +54,9 @@ def is_ddl_allowed(sql: str, span_context: Span) -> bool:
     """
     try:
         span_context.add_info_event(f"sql: {sql}")
-        parsed = sqlglot.parse_one(sql, error_level="raise")
+        logger.info(f"sql: {sql}")
+        dialect = get_adapter().get_sqlglot_dialect()
+        parsed = sqlglot.parse_one(sql, dialect=dialect, error_level="raise")
         statement_type = parsed.key.upper() if parsed.key else ""
 
         if isinstance(parsed, Drop):
@@ -248,6 +251,7 @@ def _validate_name_pattern_ddl(
             span_context.add_error_event(
                 f"{name_type}: '{name}' does not conform to rules, only letters and underscores are supported"
             )
+            logger.error(f"{name_type}: '{name}' does not conform to rules, only letters and underscores are supported")
             return format_response(
                 code=CodeEnum.DDLNotAllowed.code,
                 message=f"{name_type}: '{name}' does not conform to rules, only letters and underscores are supported",
@@ -259,6 +263,7 @@ def _validate_name_pattern_ddl(
             span_context.add_error_event(
                 f"{name_type}: '{name}' does not conform to rules, only letters and underscores are supported"
             )
+            logger.error(f"{name_type}: '{name}' does not conform to rules, only letters and underscores are supported")
             return format_response(
                 code=CodeEnum.DDLNotAllowed.code,
                 message=f"{name_type}: '{name}' does not conform to rules, only letters and underscores are supported",
@@ -318,6 +323,7 @@ async def _validate_ddl_legality(ddl: str, uid: str, span_context: Any) -> Any:
         return None
     except Exception as parse_error:  # pylint: disable=broad-except
         span_context.add_error_event(f"DDL validate legality error: {parse_error}")
+        logger.error(f"DDL validate legality error: {parse_error}")
         return format_response(
             code=CodeEnum.SQLParseError.code,
             message=f"DDL validate legality error: {parse_error}",
@@ -340,6 +346,7 @@ def _rebuild_ddl_from_ast(ddl: str, span_context: Span) -> str:
     """
     try:
         span_context.add_info_event(f"rebuilding ddl: {ddl}")
+        logger.info(f"rebuilding ddl: {ddl}")
 
         dialect = get_adapter().get_sqlglot_dialect()
 
@@ -348,6 +355,7 @@ def _rebuild_ddl_from_ast(ddl: str, span_context: Span) -> str:
 
         if not parsed:
             span_context.add_error_event("Failed to parse DDL for reconstruction")
+            logger.error("Failed to parse DDL for reconstruction")
             return ""
 
         # Rebuild SQL using the configured dialect
@@ -356,19 +364,23 @@ def _rebuild_ddl_from_ast(ddl: str, span_context: Span) -> str:
 
         if not safe_sql or not safe_sql.strip():
             span_context.add_error_event("Failed to reconstruct DDL statement")
+            logger.error("Failed to reconstruct DDL statement")
             return ""
 
         span_context.add_info_event(f"rebuilt ddl: {safe_sql}")
+        logger.info(f"rebuilt ddl: {safe_sql}")
         return safe_sql.strip()
     except ParseError as parse_error:
         span_context.record_exception(parse_error)
         span_context.add_error_event(
             f"DDL reconstruction parse error: {str(parse_error)}"
         )
+        logger.error(f"DDL reconstruction parse error: {str(parse_error)}")
         return ""
     except Exception as error:
         span_context.record_exception(error)
         span_context.add_error_event(f"DDL reconstruction failed: {str(error)}")
+        logger.error(f"DDL reconstruction failed: {str(error)}")
         return ""
 
 
@@ -378,13 +390,16 @@ async def _execute_ddl_statements(
     """Execute DDL statements across all schemas."""
     for schema in schema_list:
         span_context.add_info_event(f"set search path: {schema[0]}")
+        logger.info(f"set search path: {schema[0]}")
         await set_search_path_by_schema(db, schema[0])
         for statement in ddls:
             try:
                 await exec_sql_statement(db, statement)
                 span_context.add_info_event(f"exec ddl: {statement}")
+                logger.info(f"exec ddl: {statement}")
             except Exception as exec_error:
                 span_context.add_error_event(f"Unsupported syntax, {statement}")
+                logger.error(f"Unsupported syntax, {statement}")
                 raise exec_error
 
 
@@ -424,7 +439,9 @@ async def exec_ddl(
         }
         span_context.add_info_events(need_check)
         span_context.add_info_event(f"database_id: {database_id}")
+        logger.info(f"database_id: {database_id}")
         span_context.add_info_event(f"uid: {uid}")
+        logger.info(f"uid: {uid}")
 
         uid, error_reset = await _reset_uid(
             db, database_id, space_id, uid, span_context
@@ -501,12 +518,14 @@ async def _ddl_split(ddl: str, uid: str, span_context: Any) -> Any:
         statement.strip() for statement in ddl.split(";") if statement.strip()
     ]
     span_context.add_info_event(f"Split DDL statements: {original_ddls}")
+    logger.info(f"Split DDL statements: {original_ddls}")
 
     safe_ddls = []
     for statement in original_ddls:
         # First, use the original validation logic
         if not is_ddl_allowed(statement, span_context):
             span_context.add_error_event(f"invalid ddl: {statement}")
+            logger.error(f"invalid ddl: {statement}")
             return None, format_response(
                 CodeEnum.DDLNotAllowed.code,
                 message=f"DDL statement is invalid, illegal statement: {statement}",
@@ -524,6 +543,7 @@ async def _ddl_split(ddl: str, uid: str, span_context: Any) -> Any:
             span_context.add_error_event(
                 f"DDL reconstruction failed for security: {statement}"
             )
+            logger.error(f"DDL reconstruction failed for security: {statement}")
             return None, format_response(
                 CodeEnum.DDLNotAllowed.code,
                 message=f"DDL statement failed security reconstruction: {statement}",
@@ -534,4 +554,5 @@ async def _ddl_split(ddl: str, uid: str, span_context: Any) -> Any:
         safe_ddls.append(safe_statement)
 
     span_context.add_info_event(f"Safe reconstructed DDL statements: {safe_ddls}")
+    logger.info(f"Safe reconstructed DDL statements: {safe_ddls}")
     return safe_ddls, None

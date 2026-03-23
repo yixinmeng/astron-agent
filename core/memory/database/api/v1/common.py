@@ -2,6 +2,7 @@
 Database operator API endpoints
 for common databases.
 """
+from loguru import logger
 
 from typing import Any, List, Optional, Tuple
 
@@ -28,6 +29,7 @@ async def check_database_exists_by_did_uid(
             span_context.add_error_event(
                 f"User: {uid} does not have database: {database_id}"
             )
+            logger.error(f"User: {uid} does not have database: {database_id}")
             return None, format_response(
                 code=CodeEnum.DatabaseNotExistError.code,
                 message=f"uid: {uid} or database_id: {database_id} error, "
@@ -69,6 +71,7 @@ async def check_database_exists_by_did(
         db_id_res = await get_id_by_did(db, database_id)
         if not db_id_res:
             span_context.add_error_event(f"Database does not exist: {database_id}")
+            logger.error(f"Database does not exist: {database_id}")
             return None, format_response(
                 code=CodeEnum.DatabaseNotExistError.code,
                 message=f"database_id: {database_id} error, please verify",
@@ -98,11 +101,13 @@ async def check_space_id_and_get_uid(
 ) -> Tuple[Optional[List[List[str]]], Optional[Any]]:
     """Check if space ID is valid."""
     span_context.add_info_event(f"space_id: {space_id}")
+    logger.info(f"space_id: {space_id}")
     create_uid_res = await get_uid_by_did_space_id(db, database_id, space_id)
     if not create_uid_res:
         span_context.add_error_event(
             f"space_id: {space_id} does not contain database_id: {database_id}"
         )
+        logger.error(f"space_id: {space_id} does not contain database_id: {database_id}")
         return None, format_response(
             code=CodeEnum.SpaceIDNotExistError.code,
             message=f"space_id: {space_id} does not contain database_id: {database_id}",
@@ -119,6 +124,7 @@ async def validate_reserved_keywords(keys: list, span_context: Any) -> Any:
     for key_name in keys:
         if key_name.lower() in reserved_keywords:
             span_context.add_error_event(f"Key name '{key_name}' is not allowed")
+            logger.error(f"Key name '{key_name}' is not allowed")
             return format_response(
                 code=CodeEnum.DMLNotAllowed.code,
                 message=f"Key name '{key_name}' is not allowed",
@@ -134,6 +140,7 @@ async def validate_reserved_functions(keys: list, span_context: Any) -> Any:
     for key_name in keys:
         if key_name.lower() in dangerous_functions:
             span_context.add_error_event(f"Function name '{key_name}' is not allowed")
+            logger.error(f"Function name '{key_name}' is not allowed")
             return format_response(
                 code=CodeEnum.DMLNotAllowed.code,
                 message=f"Function name '{key_name}' is not allowed",

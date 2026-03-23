@@ -9,6 +9,7 @@ from common.otlp.trace.span import Span
 from common.service import get_otlp_metric_service, get_otlp_span_service
 from common.utils.snowfake import get_id
 from fastapi import APIRouter, Depends
+from loguru import logger
 from memory.database.api.schemas.create_db_types import CreateDBInput
 from memory.database.api.schemas.drop_db_types import DropDBInput
 from memory.database.api.schemas.modify_db_desc_types import ModifyDBDescInput
@@ -82,7 +83,9 @@ async def exec_generate_schema(
         prod_schema = f"prod_{uid}_{database_id}"
         dev_schema = f"test_{uid}_{database_id}"
         span_context.add_info_event(f"prod_schema: {prod_schema}")
+        logger.info(f"prod_schema: {prod_schema}")
         span_context.add_info_event(f"dev_schema: {dev_schema}")
+        logger.info(f"dev_schema: {dev_schema}")
 
         # Create schema/database for prod and dev environments
         prod_sql = safe_create_schema_sql(prod_schema)
@@ -140,7 +143,9 @@ async def create_db(
         }
         span_context.add_info_events(need_check)
         span_context.add_info_event(f"database_name: {database_name}")
+        logger.info(f"database_name: {database_name}")
         span_context.add_info_event(f"uid: {uid}")
+        logger.info(f"uid: {uid}")
 
         try:
             database_info = await exec_generate_schema(create_input, span_context, db)
@@ -198,10 +203,13 @@ async def drop_db(
         need_check = {"database_id": database_id, "uid": uid, "space_id": space_id}
         span_context.add_info_events(need_check)
         span_context.add_info_event(f"database_id: {database_id}")
+        logger.info(f"database_id: {database_id}")
         span_context.add_info_event(f"uid: {uid}")
+        logger.info(f"uid: {uid}")
 
         if space_id:
             span_context.add_info_event(f"space_id: {space_id}")
+            logger.info(f"space_id: {space_id}")
             create_uid_res = await get_uid_by_did_space_id(db, database_id, space_id)
             if not create_uid_res:
                 m.in_error_count(
@@ -210,6 +218,7 @@ async def drop_db(
                     span=span_context,
                 )
                 span_context.add_error_event(f"space_id: {space_id} does not exist")
+                logger.error(f"space_id: {space_id} does not exist")
                 return format_response(  # type: ignore[no-any-return]
                     code=CodeEnum.SpaceIDNotExistError.code,
                     message=f"Team space space_id: {space_id} does not exist",
@@ -293,11 +302,14 @@ async def modify_db_description(
         }
         span_context.add_info_events(need_check)
         span_context.add_info_event(f"database_id: {database_id}")
+        logger.info(f"database_id: {database_id}")
         span_context.add_info_event(f"uid: {uid}")
+        logger.info(f"uid: {uid}")
 
         try:
             if space_id:
                 span_context.add_info_event(f"space_id: {space_id}")
+                logger.info(f"space_id: {space_id}")
                 create_uid_res = await get_uid_by_did_space_id(
                     db, database_id, space_id
                 )
@@ -308,6 +320,7 @@ async def modify_db_description(
                         span=span_context,
                     )
                     span_context.add_error_event(f"space_id: {space_id} does not exist")
+                    logger.error(f"space_id: {space_id} does not exist")
                     return format_response(  # type: ignore[no-any-return]
                         code=CodeEnum.SpaceIDNotExistError.code,
                         message=f"Team space space_id: {space_id} does not exist",
@@ -327,6 +340,7 @@ async def modify_db_description(
                 span_context.add_error_event(
                     f"User: {uid} does not have database: {database_id}"
                 )
+                logger.error(f"User: {uid} does not have database: {database_id}")
                 return format_response(  # type: ignore[no-any-return]
                     code=CodeEnum.DatabaseNotExistError.code,
                     message=f"uid: {uid} or database_id: {database_id} error, "
