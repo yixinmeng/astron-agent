@@ -648,26 +648,38 @@ const ModelBasicForm = ({
   // 根据供应商类型决定显示什么提示信息
   const isAnthropicProvider = currentProvider === ModelProviderType.ANTHROPIC;
   const isGoogleProvider = currentProvider === ModelProviderType.GOOGLE;
-  // 所有其他提供商都被视为OpenAI兼容
-  const isOpenAICompatibleProvider = !isAnthropicProvider && !isGoogleProvider;
+  const isOpenAICompatibleProvider =
+    currentProvider === ModelProviderType.CHATGPT ||
+    currentProvider === ModelProviderType.ZHIPU ||
+    currentProvider === ModelProviderType.QWEN ||
+    currentProvider === ModelProviderType.MOONSHOT ||
+    currentProvider === ModelProviderType.DOUBAO ||
+    currentProvider === ModelProviderType.DEEPSEEK ||
+    currentProvider === ModelProviderType.MINIMAX;
 
   const providerHint = isAnthropicProvider
     ? t('model.providerHintAnthropic')
     : isGoogleProvider
       ? t('model.providerHintGoogle')
-      : t('model.providerHintOpenAI');
+      : isOpenAICompatibleProvider
+        ? t('model.providerHintOpenAI')
+        : t('model.providerHintOpenAI'); // default fallback
 
   const modelPlaceholder = isAnthropicProvider
     ? t('model.anthropicModelPlaceholder')
     : isGoogleProvider
       ? t('model.googleModelPlaceholder')
-      : t('model.enterModelFieldValue');
+      : isOpenAICompatibleProvider
+        ? t('model.enterModelFieldValue')
+        : t('model.enterModelFieldValue'); // default fallback
 
   const endpointPlaceholder = isAnthropicProvider
     ? t('model.anthropicEndpointPlaceholder')
     : isGoogleProvider
       ? t('model.googleEndpointPlaceholder')
-      : t('model.interfaceAddressPlaceholder');
+      : isOpenAICompatibleProvider
+        ? t('model.interfaceAddressPlaceholder')
+        : t('model.interfaceAddressPlaceholder'); // default fallback
   return (
     <>
       {modelCreateType === ModelCreateType.THIRD_PARTY && (
@@ -831,9 +843,13 @@ const ModelBasicForm = ({
         <div className="flex items-center gap-3">
           <Switch
             checked={modelInfo?.isThink}
-            onChange={checked => setModelInfo({ ...modelInfo, isThink: checked })}
+            onChange={checked =>
+              setModelInfo({ ...modelInfo, isThink: checked })
+            }
           />
-          <span className="text-xs text-gray-500">{t('model.enableThinkingCapability')}</span>
+          <span className="text-xs text-gray-500">
+            {t('model.enableThinkingCapability')}
+          </span>
         </div>
       </div>
     </>
@@ -1554,7 +1570,9 @@ export function CreateModal({
   );
   const { t } = useTranslation();
   const isEditMode = !!modelId;
-  const currentProvider = normalizeModelProvider(modalState.modelInfo?.provider);
+  const currentProvider = normalizeModelProvider(
+    modalState.modelInfo?.provider
+  );
   const modalTitle =
     modalState.modelCreateType === ModelCreateType.THIRD_PARTY
       ? t('model.addProviderModel', {
