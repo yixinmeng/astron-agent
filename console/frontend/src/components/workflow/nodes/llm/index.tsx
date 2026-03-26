@@ -131,15 +131,6 @@ const MultimediaSection = ({
   const { inputs, handleChangeInputParam, handleAddInputLine, allowAddInput } = useNodeCommon({ id, data });
   const canvasesDisabled = useFlowsManager(state => state.canvasesDisabled);
 
-  // Check if any selected model has multimodal capability
-  const models = data?.nodeParam?.model || [];
-  const hasMultimodalCapability = models.some(model => model?.checked && model?.multiMode === true);
-
-  // Only render if the model has multimodal capability
-  if (!hasMultimodalCapability) {
-    return null;
-  }
-
   return (
     <FLowCollapse
       label={
