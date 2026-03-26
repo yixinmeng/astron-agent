@@ -29,6 +29,11 @@ const translation = {
         'Large model persona setting, combined with user input questions, define the type, scope, format, etc. of problems handled by the large model here, you can use {{variableName}} method for output',
       newVersionUpdate: 'New version update',
       modelThinkingProcess: 'Model thinking process',
+      multimedia: 'Multimedia',
+      multimediaInputPlaceholder: 'Enter multimedia content or select from reference',
+      multimediaRefPlaceholder: 'Select multimedia content from other nodes',
+      noMultimediaInput: 'No multimedia input configured',
+      addMultimediaInput: 'Add multimedia input',
     },
     rpaNode: {
       selectRpa: 'select RPA',

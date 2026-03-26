@@ -196,6 +196,7 @@ export interface ModelFormData {
   pid?: number;
   customName?: string;
   isThink?: boolean;
+  multiMode?: boolean;
 }
 
 // 模型卡片组件属性

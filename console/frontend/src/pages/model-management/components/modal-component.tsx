@@ -852,6 +852,24 @@ const ModelBasicForm = ({
           </span>
         </div>
       </div>
+
+      {/* multiMode toggle for enabling multimodal capability */}
+      <div className="flex flex-col gap-2 font-normal text-sm">
+        <div className="flex items-center justify-between">
+          <div>{t('model.multimodalCapability')}：</div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Switch
+            checked={modelInfo?.multiMode}
+            onChange={checked =>
+              setModelInfo({ ...modelInfo, multiMode: checked })
+            }
+          />
+          <span className="text-xs text-gray-500">
+            {t('model.enableMultimodalCapability')}
+          </span>
+        </div>
+      </div>
     </>
   );
 };

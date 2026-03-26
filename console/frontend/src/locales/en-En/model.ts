@@ -215,6 +215,8 @@ const translation = {
     'Connect DeepSeek-V3, DeepSeek-R1 and other models for general generation, reasoning and workflow Q&A.',
   thinkingCapability: 'Thinking Capability',
   enableThinkingCapability: 'Enable thinking content output',
+  multimodalCapability: 'Multimodal Capability',
+  enableMultimodalCapability: 'Enable multimodal content input',
 };
 
 export default translation;

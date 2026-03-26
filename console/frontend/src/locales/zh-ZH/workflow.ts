@@ -29,6 +29,11 @@ const translation = {
         '大模型人设设置，需结合用户输入的问题，在此定义大模型处理问题的类型、范畴、格式等，可以使用{{变量名}}方式进行输出',
       newVersionUpdate: '有新版本更新',
       modelThinkingProcess: '模型思考过程',
+      multimedia: '多媒体',
+      multimediaInputPlaceholder: '输入多媒体内容或从引用中选择',
+      multimediaRefPlaceholder: '从其他节点选择多媒体内容',
+      noMultimediaInput: '未配置多媒体输入',
+      addMultimediaInput: '添加多媒体输入',
     },
     agentNode: {
       type: '大模型',

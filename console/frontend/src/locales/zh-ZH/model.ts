@@ -209,6 +209,8 @@ const translation = {
     '接入 DeepSeek-V3、DeepSeek-R1 等模型，适合通用生成、推理与工作流问答。',
   thinkingCapability: '思维能力',
   enableThinkingCapability: '启用思考内容输出',
+  multimodalCapability: '多模态能力',
+  enableMultimodalCapability: '启用多媒体内容输入',
 };
 
 export default translation;
