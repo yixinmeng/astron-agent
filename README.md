@@ -30,8 +30,6 @@ The platform supports **high-availability** deployment, enabling organizations t
 
 ### 🔄 Ongoing
 
-- **[Astron Industrial Intelligence Hackathon](https://awesome-astron-workflow.dev/activities/astron-industrial-intelligence-hackathon)**  🎤 <a href="https://github.com/lyj715824"><img src="https://github.com/lyj715824.png" width="20" align="center" /> @lyj715824</a> <a href="https://github.com/horizon220222"><img src="https://github.com/horizon220222.png" width="20" align="center" /> @horizon220222</a>
-
 ### 📅 Past
 
 - **[Astron Hackathon @ 2025 iFLYTEK Global 1024 Developer Festival](https://luma.com/9zmbc6xb)**  🎤 <a href="https://github.com/mklong"><img src="https://github.com/mklong.png" width="20" align="center" /> @mklong</a>
@@ -42,6 +40,7 @@ The platform supports **high-availability** deployment, enabling organizations t
 - **[Astron Talk @ Chongqing Mini Tech Fest](https://mp.weixin.qq.com/s/HROf1zZpkPVDSsCQrv2jRg)**  🎤 <a href="https://github.com/lyj715824"><img src="https://github.com/lyj715824.png" width="20" align="center" /> @lyj715824</a>
 - **[Astron Agent @ MWC Barcelona 2026](https://www.iflytek.com/en/news-events/mwc2026.html)**
 - **[Astron Agent & RPA · Hefei Meetup](https://mp.weixin.qq.com/s/tDJaoOLUrjBlgMLDurvHCw)**  🎤 <a href="https://github.com/lyj715824"><img src="https://github.com/lyj715824.png" width="20" align="center" /> @lyj715824</a> <a href="https://github.com/doctorbruce"><img src="https://github.com/doctorbruce.png" width="20" align="center" /> @doctorbruce</a>
+- **[Astron Industrial Intelligence Hackathon](https://awesome-astron-workflow.dev/activities/astron-industrial-intelligence-hackathon)**  🎤 <a href="https://github.com/lyj715824"><img src="https://github.com/lyj715824.png" width="20" align="center" /> @lyj715824</a> <a href="https://github.com/horizon220222"><img src="https://github.com/horizon220222.png" width="20" align="center" /> @horizon220222</a>
 
 ## 🚀 Quick Start
 
@@ -109,9 +108,11 @@ After startup, you can access the services at the following addresses:
 - [🔧 Configuration](docs/CONFIGURATION.md)
 - [🚀 Quick Start](https://www.xfyun.cn/doc/spark/Agent02-%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B.html)
 - [📘 Development Guide](https://www.xfyun.cn/doc/spark/Agent03-%E5%BC%80%E5%8F%91%E6%8C%87%E5%8D%97.html#_1-%E6%8C%87%E4%BB%A4%E5%9E%8B%E6%99%BA%E8%83%BD%E4%BD%93%E5%BC%80%E5%8F%91)
+- [📖 Tutorial](https://scn5s6198j3j.feishu.cn/wiki/VefnwvPbridJBikCUb1cYXO9nYb)
 - [💡 Best Practices](https://www.xfyun.cn/doc/spark/AgentNew-%E6%8A%80%E6%9C%AF%E5%AE%9E%E8%B7%B5%E6%A1%88%E4%BE%8B.html)
 - [📱 Use Cases](https://www.xfyun.cn/doc/spark/Agent05-%E5%BA%94%E7%94%A8%E6%A1%88%E4%BE%8B.html)
 - [❓ FAQ](https://www.xfyun.cn/doc/spark/Agent06-FAQ.html)
+- [🌐 Open Source Workflows](https://awesome-astron-workflow.dev/#workflows)
 
 ## 🤝 Contributing
 
