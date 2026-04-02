@@ -712,8 +712,8 @@ const useNodeModels = ({ id, data }): UseNodeModelsReturn => {
     return models?.find(item => item?.llmId === data?.nodeParam?.llmId);
   }, [data?.nodeParam?.llmId, models]);
   const isThinkModel = useMemo(() => {
-    return data?.nodeParam?.isThink;
-  }, [data?.nodeParam?.isThink]);
+    return model?.isThink === true || data?.nodeParam?.isThink === true;
+  }, [model?.isThink, data?.nodeParam?.isThink]);
   return {
     models,
     model,

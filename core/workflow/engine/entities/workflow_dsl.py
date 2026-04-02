@@ -50,11 +50,13 @@ class InputItem(BaseModel):
     :param id: ID of the input item
     :param name: Human-readable name for the input item
     :param input_schema: Input schema of the input item
+    :param fileType: File type for multimodal inputs (e.g., image, audio, video), can be empty
     """
 
     id: str = Field(default="")
     name: str = Field(..., min_length=1)
     input_schema: InputSchema = Field(alias="schema")
+    fileType: str = Field(default="")
 
 
 class OutputItem(BaseModel):

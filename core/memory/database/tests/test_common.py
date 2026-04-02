@@ -531,7 +531,8 @@ async def test_validate_reserved_functions_valid() -> None:
 @pytest.mark.asyncio
 async def test_validate_reserved_functions_invalid() -> None:
     """Test validate_reserved_functions with reserved functions."""
-    keys = ["current_user", "pg_backend_pid", "inet_server_addr"]  # These are reserved
+    # 'current_user' and 'version' are reserved in both PostgreSQL and MySQL adapters
+    keys = ["current_user", "version"]
     span_context = MagicMock()
     span_context.sid = "test-sid"
     span_context.add_error_event = MagicMock()
@@ -542,10 +543,7 @@ async def test_validate_reserved_functions_invalid() -> None:
     # Parse the response
     response_body = json.loads(result.body)
     assert response_body["code"] == CodeEnum.DMLNotAllowed.code
-    assert (
-        "current_user" in response_body["message"]
-        or "pg_backend_pid" in response_body["message"]
-    )
+    assert "current_user" in response_body["message"]
 
     # Verify error event was logged
     span_context.add_error_event.assert_called_once()

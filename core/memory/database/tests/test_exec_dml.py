@@ -17,11 +17,16 @@ from memory.database.api.v1.exec_dml import (
     _collect_functions_names,
     _collect_insert_keys,
     _collect_update_keys,
+    _convert_value_if_boolean,
+    _convert_value_if_datetime,
     _dml_add_where,
     _dml_insert_add_params,
     _dml_split,
     _exec_dml_sql,
     _extract_table_ref,
+    _is_boolean_type,
+    _is_datetime_type,
+    _is_numeric_value,
     _map_where_literals_recursive,
     _process_comparison_node,
     _process_dml_statements,
@@ -1026,3 +1031,147 @@ def test_rewrite_dml_with_complex_where() -> None:
     assert isinstance(params_dict, dict)
     # Check that literals are parameterized
     assert "John" in params_dict.values() or "Jane" in params_dict.values()
+
+
+# ---------------------------------------------------------------------------
+# _is_datetime_type tests
+# ---------------------------------------------------------------------------
+
+
+def test_is_datetime_type_timestamp() -> None:
+    """'timestamp' is a datetime type."""
+    assert _is_datetime_type("timestamp") is True
+
+
+def test_is_datetime_type_datetime() -> None:
+    """'datetime' is a datetime type."""
+    assert _is_datetime_type("datetime") is True
+
+
+def test_is_datetime_type_varchar() -> None:
+    """'varchar' is not a datetime type."""
+    assert _is_datetime_type("varchar") is False
+
+
+def test_is_datetime_type_empty_string() -> None:
+    """Empty string is not a datetime type."""
+    assert _is_datetime_type("") is False
+
+
+def test_is_datetime_type_none() -> None:
+    """None is not a datetime type."""
+    assert _is_datetime_type(None) is False  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# _convert_value_if_datetime tests
+# ---------------------------------------------------------------------------
+
+
+def test_convert_value_if_datetime_matching_format() -> None:
+    """Datetime column with matching format converts to datetime.datetime."""
+    literal_column_map = {42: "users.create_time"}
+    column_types = {"users.create_time": "timestamp"}
+    result = _convert_value_if_datetime(
+        "2025-01-15 10:30:00", 42, literal_column_map, column_types
+    )
+    assert isinstance(result, datetime.datetime)
+    assert result == datetime.datetime(2025, 1, 15, 10, 30, 0)
+
+
+def test_convert_value_if_datetime_no_mapping() -> None:
+    """No matching node_id in map returns original string."""
+    literal_column_map = {99: "users.create_time"}
+    column_types = {"users.create_time": "timestamp"}
+    result = _convert_value_if_datetime(
+        "2025-01-15 10:30:00", 42, literal_column_map, column_types
+    )
+    assert result == "2025-01-15 10:30:00"
+
+
+def test_convert_value_if_datetime_non_datetime_column() -> None:
+    """Non-datetime column type returns original string."""
+    literal_column_map = {42: "users.name"}
+    column_types = {"users.name": "varchar"}
+    result = _convert_value_if_datetime(
+        "2025-01-15 10:30:00", 42, literal_column_map, column_types
+    )
+    assert result == "2025-01-15 10:30:00"
+
+
+# ---------------------------------------------------------------------------
+# _is_boolean_type and _convert_value_if_boolean tests
+# ---------------------------------------------------------------------------
+
+
+def test_is_boolean_type_boolean() -> None:
+    """'boolean' and 'bool' are boolean types."""
+    assert _is_boolean_type("boolean") is True
+    assert _is_boolean_type("bool") is True
+    assert _is_boolean_type("BOOLEAN") is True
+
+
+def test_is_boolean_type_tinyint() -> None:
+    """MySQL tinyint(1) and tinyint are boolean types."""
+    assert _is_boolean_type("tinyint(1)") is True
+    assert _is_boolean_type("tinyint") is True
+
+
+def test_is_boolean_type_non_boolean() -> None:
+    """Varchar and int are not boolean types."""
+    assert _is_boolean_type("varchar") is False
+    assert _is_boolean_type("int") is False
+    assert _is_boolean_type("") is False
+
+
+def test_convert_value_if_boolean_true() -> None:
+    """'true' string converts to True for boolean column."""
+    literal_column_map = {42: "t.bbl"}
+    column_types = {"t.bbl": "boolean"}
+    result = _convert_value_if_boolean("true", 42, literal_column_map, column_types)
+    assert result is True
+    result = _convert_value_if_boolean("TRUE", 42, literal_column_map, column_types)
+    assert result is True
+
+
+def test_convert_value_if_boolean_false() -> None:
+    """'false' string converts to False for boolean column."""
+    literal_column_map = {42: "t.bbl"}
+    column_types = {"t.bbl": "tinyint(1)"}
+    result = _convert_value_if_boolean("false", 42, literal_column_map, column_types)
+    assert result is False
+    result = _convert_value_if_boolean("FALSE", 42, literal_column_map, column_types)
+    assert result is False
+
+
+def test_convert_value_if_boolean_non_boolean_column() -> None:
+    """Non-boolean column returns original value."""
+    literal_column_map = {42: "t.name"}
+    column_types = {"t.name": "varchar"}
+    result = _convert_value_if_boolean("false", 42, literal_column_map, column_types)
+    assert result == "false"
+
+
+# ---------------------------------------------------------------------------
+# _is_numeric_value tests
+# ---------------------------------------------------------------------------
+
+
+def test_is_numeric_value_int() -> None:
+    """Integer value is numeric."""
+    assert _is_numeric_value(42) is True
+
+
+def test_is_numeric_value_float() -> None:
+    """Float value is numeric."""
+    assert _is_numeric_value(3.14) is True
+
+
+def test_is_numeric_value_digit_string() -> None:
+    """Digit string '123' is numeric."""
+    assert _is_numeric_value("123") is True
+
+
+def test_is_numeric_value_non_numeric_string() -> None:
+    """Non-numeric string 'abc' is not numeric."""
+    assert _is_numeric_value("abc") is False

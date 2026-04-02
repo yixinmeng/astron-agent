@@ -54,6 +54,7 @@ import {
   getModelProviderLabel,
   normalizeModelProvider,
 } from '../utils/provider';
+import { mapProviderToVendor } from '../utils/provider-group';
 
 const { TextArea } = Input;
 
@@ -180,6 +181,7 @@ const buildSubmitParams = (
       precision: item?.precision,
     })),
     isThink: modelInfo?.isThink ?? false,
+    multiMode: modelInfo?.multiMode ?? false,
   };
 };
 
@@ -321,6 +323,7 @@ const handleLocalModelSubmit = (params: {
     color: botColor,
     acceleratorCount,
     modelPath: selectedLocalModel,
+    multiMode: modelInfo?.multiMode ?? false,
     config: modelParams?.map(item => ({
       id: item?.id,
       constraintType: item?.fieldType === 'boolean' ? 'switch' : 'range',
@@ -644,66 +647,41 @@ const ModelBasicForm = ({
 }): JSX.Element => {
   const { t } = useTranslation();
   const currentProvider = normalizeModelProvider(modelInfo?.provider);
-  const providerHint =
-    currentProvider === ModelProviderType.MINIMAX
-      ? t('model.providerHintMiniMax')
-      : currentProvider === ModelProviderType.ZHIPU
-        ? t('model.providerHintZhipu')
-        : currentProvider === ModelProviderType.QWEN
-          ? t('model.providerHintQwen')
-          : currentProvider === ModelProviderType.MOONSHOT
-            ? t('model.providerHintMoonshot')
-            : currentProvider === ModelProviderType.CHATGPT
-              ? t('model.providerHintChatGPT')
-              : currentProvider === ModelProviderType.DOUBAO
-                ? t('model.providerHintDoubao')
-                : currentProvider === ModelProviderType.DEEPSEEK
-                  ? t('model.providerHintDeepSeek')
-                  : currentProvider === ModelProviderType.ANTHROPIC
-                    ? t('model.providerHintAnthropic')
-                    : currentProvider === ModelProviderType.GOOGLE
-                      ? t('model.providerHintGoogle')
-                      : t('model.providerHintOpenAI');
-  const modelPlaceholder =
-    currentProvider === ModelProviderType.MINIMAX
-      ? t('model.minimaxModelPlaceholder')
-      : currentProvider === ModelProviderType.ZHIPU
-        ? t('model.zhipuModelPlaceholder')
-        : currentProvider === ModelProviderType.QWEN
-          ? t('model.qwenModelPlaceholder')
-          : currentProvider === ModelProviderType.MOONSHOT
-            ? t('model.moonshotModelPlaceholder')
-            : currentProvider === ModelProviderType.CHATGPT
-              ? t('model.chatgptModelPlaceholder')
-              : currentProvider === ModelProviderType.DOUBAO
-                ? t('model.doubaoModelPlaceholder')
-                : currentProvider === ModelProviderType.DEEPSEEK
-                  ? t('model.deepseekModelPlaceholder')
-                  : currentProvider === ModelProviderType.ANTHROPIC
-                    ? t('model.anthropicModelPlaceholder')
-                    : currentProvider === ModelProviderType.GOOGLE
-                      ? t('model.googleModelPlaceholder')
-                      : t('model.enterModelFieldValue');
-  const endpointPlaceholder =
-    currentProvider === ModelProviderType.MINIMAX
-      ? t('model.minimaxEndpointPlaceholder')
-      : currentProvider === ModelProviderType.ZHIPU
-        ? t('model.zhipuEndpointPlaceholder')
-        : currentProvider === ModelProviderType.QWEN
-          ? t('model.qwenEndpointPlaceholder')
-          : currentProvider === ModelProviderType.MOONSHOT
-            ? t('model.moonshotEndpointPlaceholder')
-            : currentProvider === ModelProviderType.CHATGPT
-              ? t('model.chatgptEndpointPlaceholder')
-              : currentProvider === ModelProviderType.DOUBAO
-                ? t('model.doubaoEndpointPlaceholder')
-                : currentProvider === ModelProviderType.DEEPSEEK
-                  ? t('model.deepseekEndpointPlaceholder')
-                  : currentProvider === ModelProviderType.ANTHROPIC
-                    ? t('model.anthropicEndpointPlaceholder')
-                    : currentProvider === ModelProviderType.GOOGLE
-                      ? t('model.googleEndpointPlaceholder')
-                      : t('model.interfaceAddressPlaceholder');
+  // 根据供应商类型决定显示什么提示信息
+  const isAnthropicProvider = currentProvider === ModelProviderType.ANTHROPIC;
+  const isGoogleProvider = currentProvider === ModelProviderType.GOOGLE;
+  const isOpenAICompatibleProvider =
+    currentProvider === ModelProviderType.CHATGPT ||
+    currentProvider === ModelProviderType.ZHIPU ||
+    currentProvider === ModelProviderType.QWEN ||
+    currentProvider === ModelProviderType.MOONSHOT ||
+    currentProvider === ModelProviderType.DOUBAO ||
+    currentProvider === ModelProviderType.DEEPSEEK ||
+    currentProvider === ModelProviderType.MINIMAX;
+
+  const providerHint = isAnthropicProvider
+    ? t('model.providerHintAnthropic')
+    : isGoogleProvider
+      ? t('model.providerHintGoogle')
+      : isOpenAICompatibleProvider
+        ? t('model.providerHintOpenAI')
+        : t('model.providerHintOpenAI'); // default fallback
+
+  const modelPlaceholder = isAnthropicProvider
+    ? t('model.anthropicModelPlaceholder')
+    : isGoogleProvider
+      ? t('model.googleModelPlaceholder')
+      : isOpenAICompatibleProvider
+        ? t('model.enterModelFieldValue')
+        : t('model.enterModelFieldValue'); // default fallback
+
+  const endpointPlaceholder = isAnthropicProvider
+    ? t('model.anthropicEndpointPlaceholder')
+    : isGoogleProvider
+      ? t('model.googleEndpointPlaceholder')
+      : isOpenAICompatibleProvider
+        ? t('model.interfaceAddressPlaceholder')
+        : t('model.interfaceAddressPlaceholder'); // default fallback
   return (
     <>
       {modelCreateType === ModelCreateType.THIRD_PARTY && (
@@ -727,34 +705,6 @@ const ModelBasicForm = ({
               {
                 label: t('model.providerGoogle'),
                 value: ModelProviderType.GOOGLE,
-              },
-              {
-                label: t('model.providerMiniMax'),
-                value: ModelProviderType.MINIMAX,
-              },
-              {
-                label: t('model.providerZhipu'),
-                value: ModelProviderType.ZHIPU,
-              },
-              {
-                label: t('model.providerQwen'),
-                value: ModelProviderType.QWEN,
-              },
-              {
-                label: t('model.providerMoonshot'),
-                value: ModelProviderType.MOONSHOT,
-              },
-              {
-                label: t('model.providerChatGPT'),
-                value: ModelProviderType.CHATGPT,
-              },
-              {
-                label: t('model.providerDoubao'),
-                value: ModelProviderType.DOUBAO,
-              },
-              {
-                label: t('model.providerDeepSeek'),
-                value: ModelProviderType.DEEPSEEK,
               },
             ]}
             onChange={value =>
@@ -858,7 +808,7 @@ const ModelBasicForm = ({
               </div>
             </div>
             <Input
-              maxLength={100}
+              maxLength={255}
               showCount
               placeholder={endpointPlaceholder}
               className="global-input w-full"
@@ -901,6 +851,24 @@ const ModelBasicForm = ({
           />
           <span className="text-xs text-gray-500">
             {t('model.enableThinkingCapability')}
+          </span>
+        </div>
+      </div>
+
+      {/* multiMode toggle for enabling multimodal capability */}
+      <div className="flex flex-col gap-2 font-normal text-sm">
+        <div className="flex items-center justify-between">
+          <div>{t('model.multimodalCapability')}：</div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Switch
+            checked={modelInfo?.multiMode}
+            onChange={checked =>
+              setModelInfo({ ...modelInfo, multiMode: checked })
+            }
+          />
+          <span className="text-xs text-gray-500">
+            {t('model.enableMultimodalCapability')}
           </span>
         </div>
       </div>
@@ -1388,6 +1356,7 @@ const updateBasicInfo = (
     domain: data?.domain || '',
     provider: normalizeModelProvider(data?.provider),
     isThink: data?.isThink ?? false,
+    multiMode: data?.multiMode ?? false,
   });
   formState.beforeModelKeys.current = data?.apiKey || '';
   avatarState.setBotIcon({ name: data?.address || '', value: data?.icon });
@@ -1452,7 +1421,7 @@ const useCreateModal = (
       interfaceAddress: initialEndpoint || '',
       apiKEY: '',
       domain: '',
-      provider: normalizeModelProvider(initialProvider),
+      provider: mapProviderToVendor(initialProvider),
       isThink: false,
     });
     formState.setTags([]);
@@ -1523,9 +1492,8 @@ const useCreateModal = (
     if (!modelId) {
       formState.setModelInfo({
         ...formState.modelInfo,
-        interfaceAddress:
-          initialEndpoint || formState.modelInfo.interfaceAddress,
-        provider: normalizeModelProvider(initialProvider),
+        interfaceAddress: initialEndpoint || formState.modelInfo.interfaceAddress,
+        provider: mapProviderToVendor(initialProvider),
         isThink: formState.modelInfo.isThink ?? false,
       });
     }

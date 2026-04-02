@@ -487,6 +487,11 @@ public class ModelService extends ServiceImpl<ModelMapper, Model> {
         if (request.getIsThink() != null) {
             model.setIsThink(request.getIsThink());
         }
+
+        // Set multiMode field if available in the request
+        if (request.getMultiMode() != null) {
+            model.setMultiMode(request.getMultiMode());
+        }
     }
 
     private static String normalizeProvider(String provider, boolean fallbackOpenAi) {

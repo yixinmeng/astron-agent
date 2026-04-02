@@ -503,7 +503,8 @@ const paste = async (
       });
     }, 500);
   } catch (error) {
-    message.error('[Clipboard] 复制失败', error);
+    console.error('[Clipboard] 复制失败', error);
+    message.error('[Clipboard] 复制失败');
     return;
   }
 };
@@ -543,18 +544,37 @@ function processInputReference(item, input, references): void {
     ref => ref.value === input.schema.value.content.nodeId
   );
 
-  const reference = findItemById(
-    node ? node?.children[0]?.references : [],
-    input.schema.value.content.id
-  );
+  const nodeReferences = node?.children?.[0]?.references || [];
+  const reference =
+    findItemById(nodeReferences, input.schema.value.content.id) ||
+    findReferenceByValue(nodeReferences, input.schema.value.content.name);
 
   if (shouldResetIteration(item, input, reference)) {
     resetContent(input);
   } else if (node && reference) {
-    applyReference(item, input, reference);
+    applyReference(item, input, reference, node.value);
   } else if (typeof input.schema.value.content === 'object') {
     resetContent(input);
   }
+}
+
+function findReferenceByValue(references, value) {
+  if (!value) {
+    return null;
+  }
+
+  for (const reference of references) {
+    if (reference?.value === value) {
+      return reference;
+    }
+
+    const childReference = findReferenceByValue(reference?.children || [], value);
+    if (childReference) {
+      return childReference;
+    }
+  }
+
+  return null;
 }
 // Should Reset Iteration
 function shouldResetIteration(item, input, reference): boolean {
@@ -567,13 +587,16 @@ function shouldResetIteration(item, input, reference): boolean {
 
 // Reset Content
 function resetContent(input): void {
+  input.schema.value.content.id = '';
   input.schema.value.content.name = '';
   input.schema.value.content.nodeId = '';
 }
 
 // Apply Reference
-function applyReference(item, input, reference): void {
+function applyReference(item, input, reference, nodeId): void {
+  input.schema.value.content.id = reference?.id;
   input.schema.value.content.name = reference?.value;
+  input.schema.value.content.nodeId = nodeId;
   if (item?.nodeType !== 'plugin' && item?.nodeType !== 'flow') {
     input.schema.type = reference?.type;
     input.fileType = reference?.fileType;

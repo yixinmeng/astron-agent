@@ -523,7 +523,7 @@ async def test_validate_ddl_legality_reserved_keyword() -> None:
 @pytest.mark.asyncio
 async def test_validate_ddl_legality_function_reserved_keyword() -> None:
     """Test DDL legality validation with reserved function name."""
-    # current_user is in PGSQL_INVALID_KEY, used as function in DEFAULT
+    # current_user is a reserved dangerous function, used as function in DEFAULT
     ddl = "CREATE TABLE users (id INT, created_at TEXT DEFAULT current_user)"
     span_context = MagicMock()
     span_context.sid = "test-sid"

@@ -965,7 +965,7 @@ class NodeFactory:
         input_keys: list[Any] = []
         output_keys = [node_output.name for node_output in outputs]
 
-        # Special handling for if-else nodes
+        # Build input_identifier list
         if node.get_node_type() == NodeType.IF_ELSE.value:
             id_name_dict = {}
             for node_input in inputs:
@@ -973,6 +973,14 @@ class NodeFactory:
             input_keys.append(id_name_dict)
         else:
             input_keys = [node_input.name for node_input in inputs]
+
+        # Build input_to_filetype_map from input definitions
+        input_to_filetype_map = {}
+        for node_input in inputs:
+            input_name = node_input.name
+            file_type = node_input.fileType
+            if file_type:  # Only add to map if fileType is not empty
+                input_to_filetype_map[input_name] = file_type
 
         return node_class(
             node_id=node.id,
@@ -982,5 +990,6 @@ class NodeFactory:
             output_identifier=output_keys,
             retry_config=retry_config,
             span=span_context,
+            input_to_filetype_map=input_to_filetype_map,  # Pass the filetype mapping
             **node.data.nodeParam,
         )

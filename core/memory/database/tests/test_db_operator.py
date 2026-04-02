@@ -1,170 +1,27 @@
 """Unit tests for database operator functionality."""
 
 import json
-from typing import Any
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from memory.database.api.schemas.clone_db_types import CloneDBInput
 from memory.database.api.schemas.create_db_types import CreateDBInput
 from memory.database.api.schemas.drop_db_types import DropDBInput
 from memory.database.api.schemas.modify_db_desc_types import ModifyDBDescInput
 from memory.database.api.v1.db_operator import (
     DatabaseInfo,
-    clone_db,
     create_db,
     drop_db,
     exec_generate_schema,
-    generate_copy_data_sql,
-    generate_copy_table_structures_sql,
     modify_db_description,
+    safe_create_schema_sql,
+    safe_drop_schema_sql,
 )
 from memory.database.domain.models.database_meta import DatabaseMeta
 from memory.database.domain.models.schema_meta import SchemaMeta
 from memory.database.exceptions.error_code import CodeEnum
+from memory.database.repository.middleware.adapters.registry import reset_adapter
 from sqlmodel.ext.asyncio.session import AsyncSession
-
-
-def test_generate_copy_table_structures_sql() -> None:
-    """Test generate_copy_table_structures_sql function."""
-    source_schema = "prod_u1_123"
-    target_schema = "prod_u1_456"
-
-    result_sql = generate_copy_table_structures_sql(source_schema, target_schema)
-
-    assert "DO $$" in result_sql
-    assert "DECLARE" in result_sql
-    assert "tbl RECORD;" in result_sql
-    assert "BEGIN" in result_sql
-    assert "FOR tbl IN" in result_sql
-    assert "SELECT tablename" in result_sql
-    assert "FROM pg_tables" in result_sql
-    assert "WHERE schemaname = " in result_sql
-    assert "CREATE TABLE" in result_sql
-    assert "LIKE" in result_sql
-    assert "INCLUDING ALL" in result_sql
-    assert "END LOOP;" in result_sql
-    assert "END;" in result_sql
-    assert "$$ LANGUAGE plpgsql;" in result_sql
-
-    assert f"schemaname = '{source_schema}'" in result_sql
-    assert f"CREATE TABLE {target_schema}." in result_sql
-    assert f"LIKE {source_schema}." in result_sql
-
-
-def test_generate_copy_data_sql() -> None:
-    """Test generate_copy_data_sql function."""
-    source_schema = "test_u1_789"
-    target_schema = "test_u1_012"
-
-    result_sql = generate_copy_data_sql(source_schema, target_schema)
-
-    assert "DO $$" in result_sql
-    assert "DECLARE" in result_sql
-    assert "tbl RECORD;" in result_sql
-    assert "BEGIN" in result_sql
-    assert "FOR tbl IN" in result_sql
-    assert "SELECT tablename" in result_sql
-    assert "FROM pg_tables" in result_sql
-    assert "WHERE schemaname = " in result_sql
-    assert "INSERT INTO" in result_sql
-    assert "SELECT * FROM" in result_sql
-    assert "END LOOP;" in result_sql
-    assert "END;" in result_sql
-    assert "$$ LANGUAGE plpgsql;" in result_sql
-
-    assert f"schemaname = '{source_schema}'" in result_sql
-    assert f"INSERT INTO {target_schema}." in result_sql
-    assert f"SELECT * FROM {source_schema}." in result_sql
-
-
-@pytest.mark.asyncio
-async def test_clone_db_success() -> None:
-    """Test clone_db endpoint success scenario."""
-    mock_db = AsyncMock()
-    mock_db.exec = AsyncMock(return_value=None)
-    mock_db.commit = AsyncMock(return_value=None)
-    mock_db.rollback = AsyncMock(return_value=None)
-
-    mock_execute_result = MagicMock()
-    mock_execute_result.first.return_value = ("u1", "old_db_name", "old_db_desc")
-    mock_db.execute = AsyncMock(return_value=mock_execute_result)
-
-    test_input = CloneDBInput(uid="u1", database_id=1, new_database_name="db2")
-
-    fake_span_context = MagicMock()
-    fake_span_context.sid = "clone-sid"
-    fake_span_context.add_info_events = MagicMock()
-    fake_span_context.record_exception = MagicMock()
-
-    with patch(
-        "memory.database.api.v1.db_operator.get_otlp_metric_service"
-    ) as mock_metric_service_func:
-        with patch(
-            "memory.database.api.v1.db_operator.get_otlp_span_service"
-        ) as mock_span_service_func:
-            # Mock meter instance
-            mock_meter_instance = MagicMock()
-            mock_meter_instance.in_success_count = MagicMock()
-
-            # Mock metric service
-            mock_metric_service = MagicMock()
-            mock_metric_service.get_meter.return_value = (
-                lambda func: mock_meter_instance
-            )
-            mock_metric_service_func.return_value = mock_metric_service
-
-            # Mock span service and instance
-            mock_span_instance = MagicMock()
-            mock_span_instance.start.return_value.__enter__.return_value = (
-                fake_span_context
-            )
-            mock_span_service = MagicMock()
-            mock_span_service.get_span.return_value = lambda uid: mock_span_instance
-            mock_span_service_func.return_value = mock_span_service
-
-            with patch(
-                "memory.database.api.v1.db_operator.get_schema_name_by_did",
-                new_callable=AsyncMock,
-            ) as mock_get_schema:
-                mock_get_schema.return_value = [["prod_schema"], ["test_schema"]]
-
-                with patch(
-                    "memory.database.api.v1.db_operator.exec_generate_schema",
-                    new_callable=AsyncMock,
-                ) as mock_exec_schema:
-
-                    async def fake_exec_generate_schema(
-                        *args: Any, **kwargs: Any
-                    ) -> DatabaseInfo:  # pylint: disable=unused-argument
-                        return DatabaseInfo(
-                            database_id=456,
-                            prod_schema="prod_new",
-                            test_schema="test_new",
-                        )
-
-                    mock_exec_schema.side_effect = fake_exec_generate_schema
-
-                    response = await clone_db(test_input, mock_db)
-
-                    response_body = json.loads(response.body)
-                    assert "code" in response_body
-                    assert "data" in response_body
-                    assert "sid" in response_body
-
-                    assert response_body["code"] == 0
-                    assert response_body["data"]["database_id"] == 456
-                    assert response_body["sid"] == "clone-sid"
-
-                    assert mock_get_schema.call_count == 1
-                    mock_get_schema.assert_called_once_with(mock_db, 1)
-
-                    mock_exec_schema.assert_called_once()
-                    fake_span_context.add_info_events.assert_called()
-                    mock_db.commit.assert_called_once()
-                    mock_meter_instance.in_success_count.assert_called_once_with(
-                        lables={"uid": "u1"}
-                    )
 
 
 @pytest.mark.asyncio
@@ -193,15 +50,7 @@ async def test_exec_generate_schema_success() -> None:
         assert result.prod_schema == f"prod_{test_input.uid}_{mock_snow_id}"
         assert result.test_schema == f"test_{test_input.uid}_{mock_snow_id}"
 
-        exec_sql_texts = [
-            call[0][0].text.strip() for call in mock_db.exec.call_args_list
-        ]
-        expected_prod_sql = 'CREATE SCHEMA IF NOT EXISTS "prod_u2_1001"'
-        expected_test_sql = 'CREATE SCHEMA IF NOT EXISTS "test_u2_1001"'
-
         assert mock_db.exec.call_count == 2
-        assert expected_prod_sql in exec_sql_texts
-        assert expected_test_sql in exec_sql_texts
 
         added_records = [call[0][0] for call in mock_db.add.call_args_list]
         db_meta = next(rec for rec in added_records if isinstance(rec, DatabaseMeta))
@@ -622,3 +471,50 @@ async def test_modify_db_description_with_space_id() -> None:
                         fake_span_context.add_info_event.assert_any_call(
                             "space_id: space123"
                         )
+
+
+# ---------------------------------------------------------------------------
+# Adapter-specific SQL generation tests
+# ---------------------------------------------------------------------------
+
+
+def test_safe_create_schema_sql_postgresql() -> None:
+    """safe_create_schema_sql with PostgreSQL adapter -> CREATE SCHEMA IF NOT EXISTS."""
+    reset_adapter()
+    with patch.dict(os.environ, {"DB_TYPE": "postgresql"}):
+        result = safe_create_schema_sql("test_schema")
+        sql_text = str(result.text)
+        assert "CREATE SCHEMA IF NOT EXISTS" in sql_text
+    reset_adapter()
+
+
+def test_safe_create_schema_sql_mysql() -> None:
+    """safe_create_schema_sql with MySQL adapter -> CREATE DATABASE IF NOT EXISTS + utf8mb4."""
+    reset_adapter()
+    with patch.dict(os.environ, {"DB_TYPE": "mysql"}):
+        result = safe_create_schema_sql("test_schema")
+        sql_text = str(result.text)
+        assert "CREATE DATABASE IF NOT EXISTS" in sql_text
+        assert "utf8mb4" in sql_text
+    reset_adapter()
+
+
+def test_safe_drop_schema_sql_postgresql() -> None:
+    """safe_drop_schema_sql with PostgreSQL adapter -> DROP SCHEMA IF EXISTS ... CASCADE."""
+    reset_adapter()
+    with patch.dict(os.environ, {"DB_TYPE": "postgresql"}):
+        result = safe_drop_schema_sql("test_schema")
+        sql_text = str(result.text)
+        assert "DROP SCHEMA IF EXISTS" in sql_text
+        assert "CASCADE" in sql_text
+    reset_adapter()
+
+
+def test_safe_drop_schema_sql_mysql() -> None:
+    """safe_drop_schema_sql with MySQL adapter -> DROP DATABASE IF EXISTS."""
+    reset_adapter()
+    with patch.dict(os.environ, {"DB_TYPE": "mysql"}):
+        result = safe_drop_schema_sql("test_schema")
+        sql_text = str(result.text)
+        assert "DROP DATABASE IF EXISTS" in sql_text
+    reset_adapter()

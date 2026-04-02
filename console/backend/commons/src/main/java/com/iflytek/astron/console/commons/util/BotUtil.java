@@ -49,6 +49,7 @@ public class BotUtil {
         botBase.setBotName(workflow.getName());
         botBase.setAvatar(workflow.getAvatarIcon());
         botBase.setBotDesc(workflow.getDescription());
+        botBase.setBotType(workflow.getCategory());
         botBase.setPromptType(0);
         botBase.setSupportContext(0);
         botBase.setSpaceId(spaceId);
