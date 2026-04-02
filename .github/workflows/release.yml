@@ -128,7 +128,7 @@ jobs:
 
           CURRENT_TAG="${{ steps.meta.outputs.version }}"
           BASE_BRANCH="origin/main"
-          git fetch origin main --tags
+          git fetch origin main --no-tags
 
           CURRENT_TAG_SHA=$(git rev-list -n 1 "$CURRENT_TAG" 2>/dev/null || git rev-parse HEAD)
           CURRENT_TAG_DATE=$(git show -s --format=%cI "$CURRENT_TAG_SHA")
