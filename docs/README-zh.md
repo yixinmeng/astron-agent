@@ -31,8 +31,6 @@
 
 ### 🔄 进行中
 
-- **[Astron 产业智变黑客松](https://awesome-astron-workflow.dev/activities/astron-industrial-intelligence-hackathon)**  🎤 <a href="https://github.com/lyj715824"><img src="https://github.com/lyj715824.png" width="20" align="center" /> @lyj715824</a> <a href="https://github.com/horizon220222"><img src="https://github.com/horizon220222.png" width="20" align="center" /> @horizon220222</a>
-
 ### 📅 往期
 
 - **[Astron 黑客松@2025科大讯飞全球1024开发者节](https://luma.com/9zmbc6xb)**  🎤 <a href="https://github.com/mklong"><img src="https://github.com/mklong.png" width="20" align="center" /> @mklong</a>
@@ -43,6 +41,7 @@
 - **[Astron Talk @ 重庆 Mini Tech Fest](https://mp.weixin.qq.com/s/HROf1zZpkPVDSsCQrv2jRg)**  🎤 <a href="https://github.com/lyj715824"><img src="https://github.com/lyj715824.png" width="20" align="center" /> @lyj715824</a>
 - **[Astron Agent 亮相 MWC Barcelona 2026](https://www.iflytek.com/en/news-events/mwc2026.html)**
 - **[Astron Agent & RPA 合肥城市行](https://mp.weixin.qq.com/s/tDJaoOLUrjBlgMLDurvHCw)**  🎤 <a href="https://github.com/lyj715824"><img src="https://github.com/lyj715824.png" width="20" align="center" /> @lyj715824</a> <a href="https://github.com/doctorbruce"><img src="https://github.com/doctorbruce.png" width="20" align="center" /> @doctorbruce</a>
+- **[Astron 产业智变黑客松](https://awesome-astron-workflow.dev/activities/astron-industrial-intelligence-hackathon)**  🎤 <a href="https://github.com/lyj715824"><img src="https://github.com/lyj715824.png" width="20" align="center" /> @lyj715824</a> <a href="https://github.com/horizon220222"><img src="https://github.com/horizon220222.png" width="20" align="center" /> @horizon220222</a>
 
 ## 🚀 快速开始
 
@@ -110,9 +109,11 @@ docker compose -f docker-compose-with-auth.yaml up -d
 - [🔧 配置说明](CONFIGURATION_zh.md)
 - [🚀 快速开始](https://www.xfyun.cn/doc/spark/Agent02-%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B.html)
 - [📘 开发指南](https://www.xfyun.cn/doc/spark/Agent03-%E5%BC%80%E5%8F%91%E6%8C%87%E5%8D%97.html#_1-%E6%8C%87%E4%BB%A4%E5%9E%8B%E6%99%BA%E8%83%BD%E4%BD%93%E5%BC%80%E5%8F%91)
+- [📖 教程](https://scn5s6198j3j.feishu.cn/wiki/VefnwvPbridJBikCUb1cYXO9nYb)
 - [💡 最佳实践](https://www.xfyun.cn/doc/spark/AgentNew-%E6%8A%80%E6%9C%AF%E5%AE%9E%E8%B7%B5%E6%A1%88%E4%BE%8B.html)
 - [📱 应用案例](https://www.xfyun.cn/doc/spark/Agent05-%E5%BA%94%E7%94%A8%E6%A1%88%E4%BE%8B.html)
 - [❓ FAQ](https://www.xfyun.cn/doc/spark/Agent06-FAQ.html)
+- [🌐 开源工作流](https://awesome-astron-workflow.dev/#workflows)
 
 ## 🤝 参与贡献
 
