@@ -7,6 +7,8 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
 import { getCommonConfig } from '@/services/common';
 import {
   getAgentType,
@@ -27,6 +29,8 @@ import { BotType, Bot, SearchBotParam, Banner } from '@/types/agent-square';
 import type { ResponseResultPage } from '@/types/global';
 import { handleShare } from '@/utils';
 import { useLocaleStore } from '@/store/spark-store/locale-store';
+
+dayjs.extend(utc);
 
 const PAGE_SIZE = 10;
 
@@ -109,6 +113,9 @@ const HomePage: React.FC = () => {
 
   const formatCreateTime = useCallback((value?: string) => {
     if (!value) return '';
+    if (/(Z|[+-]\d{2}:\d{2})$/.test(value)) {
+      return dayjs.utc(value).utcOffset(8).format('YYYY-MM-DD HH:mm');
+    }
     return value
       .replace('T', ' ')
       .replace(/(\.\d+)?Z$/, '')

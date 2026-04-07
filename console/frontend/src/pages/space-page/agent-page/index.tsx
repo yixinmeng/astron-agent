@@ -1,6 +1,8 @@
 import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Input, message, Popover, Select, Tooltip } from 'antd';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
 import { throttle } from 'lodash';
 import { enableBotFavorite } from '@/services/agent'; // NOTE: 需更换接口
 import { useTranslation } from 'react-i18next';
@@ -37,6 +39,8 @@ import { PlusOutlined } from '@ant-design/icons';
 
 import VirtualConfig from '@/components/virtual-config-modal';
 import { upgradeWorkflow } from '@/services/spark-common';
+
+dayjs.extend(utc);
 
 function index() {
   const creatorLabel = '\u521b\u5efa\u4eba\uff1a';
@@ -80,6 +84,9 @@ function index() {
 
   const formatCreateTime = useCallback((value?: string) => {
     if (!value) return '-';
+    if (/(Z|[+-]\d{2}:\d{2})$/.test(value)) {
+      return dayjs.utc(value).utcOffset(8).format('YYYY-MM-DD HH:mm');
+    }
     return value
       .replace('T', ' ')
       .replace(/(\.\d+)?Z$/, '')
