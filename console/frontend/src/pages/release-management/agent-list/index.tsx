@@ -39,6 +39,23 @@ interface AgentListProps {
   AgentType?: 'agent' | 'workflow' | 'virtual' | 'all';
 }
 
+const PUBLISHED_STATUSES = [1, 2, 4];
+
+const isPublishedBot = (botStatus?: number): boolean =>
+  botStatus !== undefined && PUBLISHED_STATUSES.includes(botStatus);
+
+const hasMarketRelease = (releaseType?: number[] | number): boolean => {
+  if (typeof releaseType === 'number') {
+    return releaseType === 1;
+  }
+  return Array.isArray(releaseType) && releaseType.includes(1);
+};
+
+const canTakeDownMarket = (bot: {
+  botStatus?: number;
+  releaseType?: number[] | number;
+}): boolean => isPublishedBot(bot.botStatus) && hasMarketRelease(bot.releaseType);
+
 const AgentList: React.FC<AgentListProps> = ({ AgentType }) => {
   const screenWidth = useScreenWidth();
   const botInfo = useBotStateStore(state => state.botDetailInfo);
@@ -143,7 +160,7 @@ const AgentList: React.FC<AgentListProps> = ({ AgentType }) => {
         close && close();
       },
       onOk: (close: () => void) => {
-        if (releaseType == 1 && botId) {
+        if (hasMarketRelease(releaseType) && botId) {
           handleAgentStatus(botId, {
             action: 'OFFLINE',
             publishType: 'MARKET',
@@ -154,6 +171,7 @@ const AgentList: React.FC<AgentListProps> = ({ AgentType }) => {
               close && close();
               message.success(t('releaseManagement.submitApplicationSuccess'));
               setPageInfo(pre => ({ ...pre, pageIndex: 1 }));
+              updateBotList({ ...pageInfo, pageIndex: 1 });
             })
             .catch(err => {
               err?.msg && message.error(err.msg);
@@ -476,29 +494,26 @@ const AgentList: React.FC<AgentListProps> = ({ AgentType }) => {
           )}
 
           {/* 查看按钮 - 已发布状态显示 -- 都改为分析 */}
-          {bot.botStatus === 2 && (
+          {isPublishedBot(bot.botStatus) && (
             <span onClick={() => checkAgent(bot)}>
               {t('releaseManagement.analyze')}
             </span>
           )}
 
           {/* 下架按钮 - 已发布状态显示 */}
-          {bot.botStatus === 2 &&
-            Array.isArray(bot?.releaseType) &&
-            !bot.releaseType.includes(2) &&
-            !bot.releaseType.includes(4) && (
-              <span
-                style={{ marginRight: '10px' }}
-                onClick={() =>
-                  cancelUploadBot(
-                    bot?.botId as unknown as number,
-                    bot?.releaseType as unknown as number[]
-                  )
-                }
-              >
-                {t('releaseManagement.takeDown')}
-              </span>
-            )}
+          {canTakeDownMarket(bot) && (
+            <span
+              style={{ marginRight: '10px' }}
+              onClick={() =>
+                cancelUploadBot(
+                  bot?.botId as unknown as number,
+                  bot?.releaseType as unknown as number[]
+                )
+              }
+            >
+              {t('releaseManagement.takeDown')}
+            </span>
+          )}
 
           {/* 删除按钮 - 审核未通过状态显示  -- NOTE: 不需要显示，如果需要使用，则添加AgentPage中的删除逻辑*/}
           {/* {bot.botStatus === 3 && (
