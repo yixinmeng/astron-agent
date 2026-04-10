@@ -16,7 +16,6 @@ import {
   ConfigProvider,
   Switch,
 } from 'antd';
-import JSEncrypt from 'jsencrypt';
 import {
   modelCreate,
   deleteModelAPI,
@@ -55,6 +54,7 @@ import {
   normalizeModelProvider,
 } from '../utils/provider';
 import { mapProviderToVendor } from '../utils/provider-group';
+import { encryptApiKey } from '../utils/encrypt-api-key';
 
 const { TextArea } = Input;
 
@@ -62,16 +62,6 @@ const { TextArea } = Input;
 const checkNameConventions = (string: string): boolean => {
   const regex = /^[a-zA-Z0-9_-]+$/;
   return regex.test(string);
-};
-
-const encryptApiKey = (publicKey: string, apiKey: string): string => {
-  const encrypt = new JSEncrypt();
-  encrypt.setPublicKey(publicKey);
-  const encrypted = encrypt.encrypt(apiKey);
-  if (!encrypted) {
-    throw new Error(i18next.t('model.encryptionFailed'));
-  }
-  return encrypted;
 };
 
 const checkParamsTable = (modelParams: ModelConfigParam[]): boolean => {
@@ -808,7 +798,7 @@ const ModelBasicForm = ({
               </div>
             </div>
             <Input
-              maxLength={255}
+              maxLength={1024}
               showCount
               placeholder={endpointPlaceholder}
               className="global-input w-full"
@@ -825,7 +815,7 @@ const ModelBasicForm = ({
               </div>
             </div>
             <Input
-              maxLength={255}
+              maxLength={1024}
               showCount
               placeholder={t('common.inputPlaceholder')}
               className="global-input w-full"
