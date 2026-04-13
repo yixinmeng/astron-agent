@@ -5,7 +5,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
 from common.otlp.trace.span import Span
-from openai import APIError, APITimeoutError, AsyncOpenAI
+from openai import APIError, APITimeoutError
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from pydantic import BaseModel, ConfigDict, Field
 

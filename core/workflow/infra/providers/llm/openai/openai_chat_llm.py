@@ -234,7 +234,7 @@ class OpenAIChatAI(ChatAI):
         if multimodal_inputs:
             # Find the last user message to append multimodal content
             last_user_msg_index = -1
-            for i in range(len(user_message)-1, -1, -1):
+            for i in range(len(user_message) - 1, -1, -1):
                 if user_message[i].get('role') == 'user':
                     last_user_msg_index = i
                     break

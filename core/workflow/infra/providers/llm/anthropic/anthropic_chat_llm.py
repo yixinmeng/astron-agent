@@ -5,13 +5,17 @@ This module provides integration with the official Anthropic SDK to connect
 with Claude models via the Messages API.
 """
 
-import asyncio
-from typing import Any, AsyncIterator, Dict, List, Tuple
 import json
+from typing import Any, AsyncIterator, Dict, List, Tuple
 
 import anthropic
-from anthropic.types import MessageStreamEvent, RawMessageStartEvent, RawMessageDeltaEvent, RawMessageStopEvent, \
-    RawContentBlockStartEvent, RawContentBlockDeltaEvent, RawContentBlockStopEvent
+from anthropic.types import (
+    MessageStreamEvent,
+    RawMessageStartEvent,
+    RawMessageDeltaEvent,
+    RawMessageStopEvent,
+    RawContentBlockDeltaEvent,
+)
 
 from workflow.consts.engine.chat_status import ChatStatus
 from workflow.engine.nodes.entities.llm_response import LLMResponse

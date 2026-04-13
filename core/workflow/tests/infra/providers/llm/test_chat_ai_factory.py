@@ -42,7 +42,7 @@ sys.modules.setdefault(
     fake_openai_module,
 )
 
-from workflow.infra.providers.llm.chat_ai_factory import ChatAIFactory
+from workflow.infra.providers.llm.chat_ai_factory import ChatAIFactory  # noqa: E402
 
 
 def build_chat_ai(provider: str):

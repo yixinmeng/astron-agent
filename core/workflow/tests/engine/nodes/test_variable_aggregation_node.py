@@ -1,7 +1,5 @@
 import asyncio
 
-import pytest
-
 from workflow.engine.entities.variable_pool import VariablePool
 from workflow.engine.entities.workflow_dsl import WorkflowDSL
 from workflow.engine.nodes.variable_aggregation.variable_aggregation_node import (
@@ -164,11 +162,11 @@ def test_variable_aggregation_uses_next_non_empty_candidate() -> None:
 def test_variable_aggregation_preserves_zero_value() -> None:
     result = asyncio.run(
         execute_node(
-        first_value=0,
-        second_value=5,
-        first_type="integer",
-        second_type="integer",
-        output_type="integer",
+            first_value=0,
+            second_value=5,
+            first_type="integer",
+            second_type="integer",
+            output_type="integer",
         )
     )
 
@@ -179,11 +177,11 @@ def test_variable_aggregation_preserves_zero_value() -> None:
 def test_variable_aggregation_preserves_false_value() -> None:
     result = asyncio.run(
         execute_node(
-        first_value=False,
-        second_value=True,
-        first_type="boolean",
-        second_type="boolean",
-        output_type="boolean",
+            first_value=False,
+            second_value=True,
+            first_type="boolean",
+            second_type="boolean",
+            output_type="boolean",
         )
     )
 
@@ -194,10 +192,10 @@ def test_variable_aggregation_preserves_false_value() -> None:
 def test_variable_aggregation_uses_fallback_when_all_candidates_empty() -> None:
     result = asyncio.run(
         execute_node(
-        first_value="",
-        second_value="",
-        fallback_enabled=True,
-        fallback_value="fallback",
+            first_value="",
+            second_value="",
+            fallback_enabled=True,
+            fallback_value="fallback",
         )
     )
 
@@ -208,10 +206,10 @@ def test_variable_aggregation_uses_fallback_when_all_candidates_empty() -> None:
 def test_variable_aggregation_fails_on_invalid_runtime_payload() -> None:
     result = asyncio.run(
         execute_node(
-        first_value="bad-value",
-        second_value="",
-        first_type="integer",
-        second_type="integer",
+            first_value="bad-value",
+            second_value="",
+            first_type="integer",
+            second_type="integer",
         output_type="integer",
         )
     )
