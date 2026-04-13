@@ -59,7 +59,8 @@ const hasMarketRelease = (releaseType?: number[] | number): boolean => {
 const canTakeDownMarket = (bot: {
   botStatus?: number;
   releaseType?: number[] | number;
-}): boolean => isPublishedBot(bot.botStatus) && hasMarketRelease(bot.releaseType);
+}): boolean =>
+  isPublishedBot(bot.botStatus) && hasMarketRelease(bot.releaseType);
 
 const formatUtcListTime = (value?: string): string => {
   if (!value) return '-';
@@ -160,7 +161,9 @@ const AgentList: React.FC<AgentListProps> = ({ AgentType }) => {
       ),
       closable: true,
       maskClosable: true,
-      closeIcon: <img src={closeIcon} alt="close" className={styles.closeIcon} />,
+      closeIcon: (
+        <img src={closeIcon} alt="close" className={styles.closeIcon} />
+      ),
       okType: 'primary',
       width: '461px',
       content: (
@@ -411,9 +414,7 @@ const AgentList: React.FC<AgentListProps> = ({ AgentType }) => {
               : t('releaseManagement.applyTime'),
         align: 'center',
         render: (time: string) => (
-          <span className={styles.timeColor}>
-            {formatUtcListTime(time)}
-          </span>
+          <span className={styles.timeColor}>{formatUtcListTime(time)}</span>
         ),
       });
     }

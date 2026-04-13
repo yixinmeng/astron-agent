@@ -32,8 +32,7 @@ export const IteratorDetail = memo(
       return (
         nodes?.some(
           node =>
-            node?.data?.parentId === id &&
-            node?.nodeType === 'question-answer'
+            node?.data?.parentId === id && node?.nodeType === 'question-answer'
         ) ?? false
       );
     }, [nodes, id]);
@@ -82,7 +81,8 @@ export const IteratorDetail = memo(
         }
 
         if ('errorResponseMethod' in param) {
-          delete (param as { errorResponseMethod?: string }).errorResponseMethod;
+          delete (param as { errorResponseMethod?: string })
+            .errorResponseMethod;
           changed = true;
         }
 
@@ -99,51 +99,55 @@ export const IteratorDetail = memo(
       });
     });
 
-    const handleChangeNodeParam = useMemoizedFn((key: string, value: unknown) => {
-      if (
-        key === 'runMode' &&
-        value === 'parallel' &&
-        hasQuestionAnswerChildNode
-      ) {
-        message.warning(
-          t('workflow.nodes.iteratorNode.cannotSwitchToParallelWithQa')
-        );
-        return;
-      }
-      setNode(id, old => {
-        const next = cloneDeep(old);
-        const param =
-          (next.data.nodeParam as Record<string, unknown>) ||
-          (next.data.nodeParam = {});
+    const handleChangeNodeParam = useMemoizedFn(
+      (key: string, value: unknown) => {
+        if (
+          key === 'runMode' &&
+          value === 'parallel' &&
+          hasQuestionAnswerChildNode
+        ) {
+          message.warning(
+            t('workflow.nodes.iteratorNode.cannotSwitchToParallelWithQa')
+          );
+          return;
+        }
+        setNode(id, old => {
+          const next = cloneDeep(old);
+          const param =
+            (next.data.nodeParam as Record<string, unknown>) ||
+            (next.data.nodeParam = {});
 
-        if (key === 'runMode') {
-          const runMode = value as string;
-          const isParallel = runMode === 'parallel';
+          if (key === 'runMode') {
+            const runMode = value as string;
+            const isParallel = runMode === 'parallel';
 
-          param.runMode = runMode;
-          param.isParallel = isParallel;
+            param.runMode = runMode;
+            param.isParallel = isParallel;
 
-          if (isParallel) {
-            param.maxConcurrency = param.maxConcurrency ?? 2;
+            if (isParallel) {
+              param.maxConcurrency = param.maxConcurrency ?? 2;
+            } else {
+              delete param.maxConcurrency;
+            }
+
+            delete (param as { errorResponseMethod?: string })
+              .errorResponseMethod;
+          } else if (key === 'errorStrategy') {
+            param.errorStrategy = value;
+            delete (param as { errorResponseMethod?: string })
+              .errorResponseMethod;
+          } else if (key === 'maxConcurrency') {
+            param.maxConcurrency = value;
           } else {
-            delete param.maxConcurrency;
+            param[key] = value;
           }
 
-          delete (param as { errorResponseMethod?: string }).errorResponseMethod;
-        } else if (key === 'errorStrategy') {
-          param.errorStrategy = value;
-          delete (param as { errorResponseMethod?: string }).errorResponseMethod;
-        } else if (key === 'maxConcurrency') {
-          param.maxConcurrency = value;
-        } else {
-          param[key] = value;
-        }
-
-        return next;
-      });
-      autoSaveCurrentFlow();
-      canPublishSetNot();
-    });
+          return next;
+        });
+        autoSaveCurrentFlow();
+        canPublishSetNot();
+      }
+    );
 
     useEffect(() => {
       ensureDefaultRunConfig();
@@ -255,7 +259,9 @@ export const IteratorDetail = memo(
                     </span>
                     <Select
                       className="flow-select"
-                      value={(nodeParam?.errorStrategy as string) || 'fail_fast'}
+                      value={
+                        (nodeParam?.errorStrategy as string) || 'fail_fast'
+                      }
                       options={[
                         {
                           label: t(

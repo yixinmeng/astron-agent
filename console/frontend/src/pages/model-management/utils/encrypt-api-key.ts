@@ -8,7 +8,9 @@ const getMaxChunkBytes = (publicKey: string): number => {
   const encrypt = new JSEncrypt();
   encrypt.setPublicKey(publicKey);
 
-  const key = encrypt.getKey() as unknown as { n?: { bitLength?: () => number } };
+  const key = encrypt.getKey() as unknown as {
+    n?: { bitLength?: () => number };
+  };
   const bitLength = key?.n?.bitLength?.();
 
   if (typeof bitLength === 'number' && bitLength > RSA_PKCS1_PADDING_OVERHEAD) {
@@ -92,7 +94,10 @@ export const encryptApiKey = (publicKey: string, apiKey: string): string => {
     return decodeBase64ToBytes(encrypted);
   });
 
-  const totalLength = encryptedBlocks.reduce((sum, block) => sum + block.length, 0);
+  const totalLength = encryptedBlocks.reduce(
+    (sum, block) => sum + block.length,
+    0
+  );
   const mergedBytes = new Uint8Array(totalLength);
   let offset = 0;
 

@@ -436,7 +436,9 @@ const HomePage: React.FC = () => {
                                 {item?.creator || t('home.officialAssistant')}
                               </span>
                               {item?.createTime ? (
-                                <span title={formatCreateTime(item?.createTime)}>
+                                <span
+                                  title={formatCreateTime(item?.createTime)}
+                                >
                                   {formatCreateTime(item?.createTime)}
                                 </span>
                               ) : null}

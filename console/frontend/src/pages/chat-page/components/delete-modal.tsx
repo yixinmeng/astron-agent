@@ -11,7 +11,9 @@ const DeleteModal = (props: {
 }): ReactElement => {
   const { open, onCancel } = props;
   const { t } = useTranslation();
-  const setChatFileListNoReq = useChatStore(state => state.setChatFileListNoReq);
+  const setChatFileListNoReq = useChatStore(
+    state => state.setChatFileListNoReq
+  );
   const setBotInfo = useBotInfoStore(state => state.setBotInfo);
   const setMessageList = useChatStore(state => state.setMessageList); //  设置消息列表
   const setCurrentChatId = useChatStore(state => state.setCurrentChatId); //  设置当前聊天id
