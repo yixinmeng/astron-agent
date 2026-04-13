@@ -10,7 +10,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 # Import Google GenAI SDK (new package name)
 from google.genai import Client
-from google.genai.types import Content, Part, GenerateContentConfig
+from google.genai.types import Content, GenerateContentConfig, Part
 
 from workflow.consts.engine.chat_status import ChatStatus
 from workflow.engine.nodes.entities.llm_response import LLMResponse
@@ -31,7 +31,7 @@ class GoogleChatAI(ChatAI):
 
     model_config = {"arbitrary_types_allowed": True, "protected_namespaces": ()}
 
-    def __init__(self, **data):
+    def __init__(self, **data: Any) -> None:
         """
         Initialize GoogleChatAI and create the GenAI client.
 
@@ -104,18 +104,24 @@ class GoogleChatAI(ChatAI):
 
             # Handle image content
             if content_type == "image":
-                converted_messages.append({
-                    "role": "user",
-                    "parts": [
-                        Part.from_data(mime_type="image/jpeg", data=item.get("content", "")),
-                    ]
-                })
+                converted_messages.append(
+                    {
+                        "role": "user",
+                        "parts": [
+                            Part.from_data(
+                                mime_type="image/jpeg", data=item.get("content", "")
+                            ),
+                        ],
+                    }
+                )
             else:
                 # Handle text content
-                converted_messages.append({
-                    "role": "model" if role == "assistant" else "user",
-                    "parts": [str(item.get("content", ""))]
-                })
+                converted_messages.append(
+                    {
+                        "role": "model" if role == "assistant" else "user",
+                        "parts": [str(item.get("content", ""))],
+                    }
+                )
 
         payload: Dict[str, Any] = {
             "messages": converted_messages,
@@ -156,8 +162,7 @@ class GoogleChatAI(ChatAI):
         return status, content, reasoning_content, token_usage
 
     async def _convert_messages_to_genai_format(
-        self,
-        message: list
+        self, message: list
     ) -> Tuple[List[Content], Optional[str]]:
         """
         Convert the internal message format to Google GenAI format.
@@ -208,7 +213,7 @@ class GoogleChatAI(ChatAI):
         system_instruction = "\n".join(system_parts) if system_parts else None
         return contents, system_instruction
 
-    async def _recv_messages(
+    async def _recv_messages(  # noqa: C901
         self,
         url: str,
         user_message: list,
@@ -233,7 +238,9 @@ class GoogleChatAI(ChatAI):
             LLMResponse objects containing normalized API responses
         """
         # Convert messages to Google GenAI format
-        contents, system_instruction = await self._convert_messages_to_genai_format(user_message)
+        contents, system_instruction = await self._convert_messages_to_genai_format(
+            user_message
+        )
 
         # Validate we have content to send
         if not contents:
@@ -271,7 +278,9 @@ class GoogleChatAI(ChatAI):
 
             # Handle response_mime_type if specified
             if "response_mime_type" in extra_params:
-                generation_config.response_mime_type = extra_params["response_mime_type"]
+                generation_config.response_mime_type = extra_params[
+                    "response_mime_type"
+                ]
 
         try:
             usage = {}  # Initialize usage dict
@@ -284,23 +293,27 @@ class GoogleChatAI(ChatAI):
             ):
                 # Extract text from chunk
                 text = ""
-                if hasattr(chunk, 'text') and chunk.text:
+                if hasattr(chunk, "text") and chunk.text:
                     text = chunk.text
-                elif hasattr(chunk, 'candidates') and chunk.candidates:
+                elif hasattr(chunk, "candidates") and chunk.candidates:
                     # Alternative way to extract text from response
                     candidate = chunk.candidates[0]
-                    if hasattr(candidate, 'content') and candidate.content:
+                    if hasattr(candidate, "content") and candidate.content:
                         for part in candidate.content.parts:
-                            if hasattr(part, 'text'):
+                            if hasattr(part, "text"):
                                 text += part.text
 
                 # Extract usage metadata if available
-                if hasattr(chunk, 'usage_metadata') and chunk.usage_metadata:
+                if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
                     usage_metadata = chunk.usage_metadata
                     usage = {
-                        "prompt_tokens": getattr(usage_metadata, 'prompt_token_count', 0),
-                        "completion_tokens": getattr(usage_metadata, 'candidates_token_count', 0),
-                        "total_tokens": getattr(usage_metadata, 'total_token_count', 0),
+                        "prompt_tokens": getattr(
+                            usage_metadata, "prompt_token_count", 0
+                        ),
+                        "completion_tokens": getattr(
+                            usage_metadata, "candidates_token_count", 0
+                        ),
+                        "total_tokens": getattr(usage_metadata, "total_token_count", 0),
                     }
 
                 # Build normalized response structure similar to OpenAI

@@ -2,22 +2,21 @@ import asyncio
 
 from workflow.engine.entities.variable_pool import VariablePool
 from workflow.engine.entities.workflow_dsl import WorkflowDSL
-from workflow.engine.nodes.variable_aggregation.variable_aggregation_node import (
-    VariableAggregationNode,
-)
 from workflow.engine.nodes.entities.node_run_result import (
     NodeRunResult,
     WorkflowNodeExecutionStatus,
 )
+from workflow.engine.nodes.variable_aggregation.variable_aggregation_node import (
+    VariableAggregationNode,
+)
 from workflow.exception.errors.err_code import CodeEnum
 from workflow.extensions.otlp.trace.span import Span
-
 
 START_NODE_ID = "node-start::11111111-1111-1111-1111-111111111111"
 AGGREGATION_NODE_ID = "variable-aggregation::22222222-2222-2222-2222-222222222222"
 
 
-def build_workflow_dsl(
+def build_workflow_dsl(  # type: ignore[no-untyped-def]
     *,
     first_type: str = "string",
     second_type: str = "string",
@@ -107,16 +106,16 @@ def build_workflow_dsl(
     )
 
 
-async def execute_node(
+async def execute_node(  # type: ignore[no-untyped-def]
     *,
-    first_value,
-    second_value,
+    first_value: object = None,
+    second_value: object = None,
     first_type: str = "string",
     second_type: str = "string",
     output_type: str = "string",
     fallback_enabled: bool = False,
-    fallback_value="",
-):
+    fallback_value: object = "",
+) -> NodeRunResult:
     span = Span()
     dsl = build_workflow_dsl(
         first_type=first_type,
@@ -210,7 +209,7 @@ def test_variable_aggregation_fails_on_invalid_runtime_payload() -> None:
             second_value="",
             first_type="integer",
             second_type="integer",
-        output_type="integer",
+            output_type="integer",
         )
     )
 

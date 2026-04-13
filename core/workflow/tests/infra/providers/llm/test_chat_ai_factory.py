@@ -2,12 +2,11 @@
 
 import sys
 import types
+
 import pytest
 
 from workflow.consts.engine.model_provider import ModelProviderEnum
-from workflow.infra.providers.llm.anthropic.anthropic_chat_llm import (
-    AnthropicChatAI,
-)
+from workflow.infra.providers.llm.anthropic.anthropic_chat_llm import AnthropicChatAI
 from workflow.infra.providers.llm.google.google_chat_llm import GoogleChatAI
 
 fake_spark_module = types.ModuleType(
@@ -16,11 +15,11 @@ fake_spark_module = types.ModuleType(
 
 
 class FakeSparkChatAi:
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: object) -> None:
         self.kwargs = kwargs
 
 
-fake_spark_module.SparkChatAi = FakeSparkChatAi
+fake_spark_module.SparkChatAi = FakeSparkChatAi  # type: ignore[attr-defined]
 sys.modules.setdefault(
     "workflow.infra.providers.llm.iflytek_spark.spark_chat_llm",
     fake_spark_module,
@@ -32,11 +31,11 @@ fake_openai_module = types.ModuleType(
 
 
 class FakeOpenAIChatAI:
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: object) -> None:
         self.kwargs = kwargs
 
 
-fake_openai_module.OpenAIChatAI = FakeOpenAIChatAI
+fake_openai_module.OpenAIChatAI = FakeOpenAIChatAI  # type: ignore[attr-defined]
 sys.modules.setdefault(
     "workflow.infra.providers.llm.openai.openai_chat_llm",
     fake_openai_module,
@@ -45,7 +44,7 @@ sys.modules.setdefault(
 from workflow.infra.providers.llm.chat_ai_factory import ChatAIFactory  # noqa: E402
 
 
-def build_chat_ai(provider: str):
+def build_chat_ai(provider: str) -> object:
     return ChatAIFactory.get_chat_ai(
         model_source=provider,
         model_url="https://example.com/v1/messages",

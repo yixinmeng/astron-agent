@@ -25,7 +25,9 @@ def init_data_base() -> None:
         f"mysql+pymysql://{user}:{password}@{mysql_host}:{mysql_port}/{db}"
         "?charset=utf8mb4"
     )
-    base_engine = create_engine(f"mysql+pymysql://{user}:{password}@{mysql_host}:{mysql_port}")
+    base_engine = create_engine(
+        f"mysql+pymysql://{user}:{password}@{mysql_host}:{mysql_port}"
+    )
     with base_engine.connect() as conn:
         conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{db}`"))
         conn.commit()

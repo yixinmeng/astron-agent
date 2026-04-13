@@ -11,10 +11,10 @@ from typing import Any, AsyncIterator, Dict, List, Tuple
 import anthropic
 from anthropic.types import (
     MessageStreamEvent,
-    RawMessageStartEvent,
-    RawMessageDeltaEvent,
-    RawMessageStopEvent,
     RawContentBlockDeltaEvent,
+    RawMessageDeltaEvent,
+    RawMessageStartEvent,
+    RawMessageStopEvent,
 )
 
 from workflow.consts.engine.chat_status import ChatStatus
@@ -93,26 +93,30 @@ class AnthropicChatAI(ChatAI):
 
             # Handle image content
             if content_type == "image":
-                payload_messages.append({
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": str(item.get("content", "")),
-                            },
-                        }
-                    ],
-                })
+                payload_messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/jpeg",
+                                    "data": str(item.get("content", "")),
+                                },
+                            }
+                        ],
+                    }
+                )
                 continue
 
             # Handle text content
-            payload_messages.append({
-                "role": "assistant" if role == "assistant" else "user",
-                "content": str(item.get("content", "")),
-            })
+            payload_messages.append(
+                {
+                    "role": "assistant" if role == "assistant" else "user",
+                    "content": str(item.get("content", "")),
+                }
+            )
 
         # Prepare the final payload for Anthropic API
         payload: Dict[str, Any] = {
@@ -193,7 +197,7 @@ class AnthropicChatAI(ChatAI):
 
         # Content delta event - contains the actual text being streamed
         elif isinstance(event, RawContentBlockDeltaEvent):
-            text = event.delta.get('text', '')
+            text = event.delta.get("text", "")
             return {
                 "choices": [
                     {
@@ -209,8 +213,8 @@ class AnthropicChatAI(ChatAI):
 
         # Message delta event - contains usage information
         elif isinstance(event, RawMessageDeltaEvent):
-            input_tokens = event.message.get('usage', {}).get('input_tokens', 0)
-            output_tokens = event.message.get('usage', {}).get('output_tokens', 0)
+            input_tokens = event.message.get("usage", {}).get("input_tokens", 0)
+            output_tokens = event.message.get("usage", {}).get("output_tokens", 0)
             return {
                 "choices": [
                     {
@@ -238,17 +242,17 @@ class AnthropicChatAI(ChatAI):
             }
 
         # Error event - raise exception
-        elif hasattr(event, 'type') and 'error' in event.type:
+        elif hasattr(event, "type") and "error" in event.type:
             raise CustomException(
                 err_code=CodeEnum.OPEN_AI_REQUEST_ERROR,
-                err_msg=str(getattr(event, 'error', 'Anthropic request failed')),
+                err_msg=str(getattr(event, "error", "Anthropic request failed")),
                 cause_error=str(event),
             )
         else:
             # Other event types we don't handle
             return None
 
-    async def _recv_messages(
+    async def _recv_messages(  # noqa: C901
         self,
         url: str,
         user_message: list,
@@ -280,7 +284,7 @@ class AnthropicChatAI(ChatAI):
         # If a custom URL is provided, use it as the base_url for the client
         client_kwargs = {
             "api_key": self.api_key,
-            "timeout": timeout or 60.0  # Default to 60 seconds if no timeout specified
+            "timeout": timeout or 60.0,  # Default to 60 seconds if no timeout specified
         }
 
         # If url is not the placeholder, use it as the base_url for custom endpoints
@@ -317,10 +321,6 @@ class AnthropicChatAI(ChatAI):
 
         # Initialize usage tracking
         usage: Dict[str, Any] = {}
-        last_frame: Dict[str, Any] = {
-            "choices": [{"delta": {"content": "", "reasoning_content": ""}, "finish_reason": None}],
-            "usage": {},
-        }
 
         try:
             # Make the async streaming call using Anthropic SDK
@@ -331,8 +331,6 @@ class AnthropicChatAI(ChatAI):
 
                     if normalized is None:
                         continue
-
-                    last_frame = normalized
 
                     # Log the received message for tracing
                     await span.add_info_events_async(

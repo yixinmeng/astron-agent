@@ -5,8 +5,9 @@ import pytest
 from workflow.consts.engine.chat_status import ChatStatus, SparkLLMStatus
 from workflow.consts.engine.model_provider import ModelProviderEnum
 from workflow.engine.nodes.util.frame_processor import (
+    AnthropicFrameProcessor,
     FrameProcessorFactory,
-    OpenAIFrameProcessor,
+    GoogleFrameProcessor,
 )
 
 

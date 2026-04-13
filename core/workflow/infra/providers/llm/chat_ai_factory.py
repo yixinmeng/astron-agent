@@ -8,8 +8,12 @@ It supports multiple AI providers including Xinghuo (Spark), OpenAI, Anthropic, 
 from typing import Any
 
 from workflow.consts.engine.model_provider import ModelProviderEnum
-from workflow.infra.providers.llm.anthropic.anthropic_chat_llm import AnthropicChatAI  # Changed to use new implementation
-from workflow.infra.providers.llm.google.google_chat_llm import GoogleChatAI  # Changed to use new implementation
+from workflow.infra.providers.llm.anthropic.anthropic_chat_llm import (
+    AnthropicChatAI,  # Changed to use new implementation
+)
+from workflow.infra.providers.llm.google.google_chat_llm import (
+    GoogleChatAI,  # Changed to use new implementation
+)
 from workflow.infra.providers.llm.iflytek_spark.spark_chat_llm import SparkChatAi
 from workflow.infra.providers.llm.openai.openai_chat_llm import OpenAIChatAI
 
