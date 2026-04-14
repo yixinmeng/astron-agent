@@ -700,7 +700,11 @@ function index() {
                                   className="p-1 rounded hover:bg-[#F2F5FE] text-[#F74E43]"
                                   onClick={e => {
                                     e.stopPropagation();
-                                    if (k?.uid && user?.uid && k.uid !== user.uid) {
+                                    if (
+                                      k?.uid &&
+                                      user?.uid &&
+                                      k.uid !== user.uid
+                                    ) {
                                       message.warning(
                                         '\u65e0\u6cd5\u5220\u9664\u4ed6\u4eba\u521b\u5efa\u7684\u667a\u80fd\u4f53'
                                       );

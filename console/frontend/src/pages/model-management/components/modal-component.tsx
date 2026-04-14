@@ -1482,7 +1482,8 @@ const useCreateModal = (
     if (!modelId) {
       formState.setModelInfo({
         ...formState.modelInfo,
-        interfaceAddress: initialEndpoint || formState.modelInfo.interfaceAddress,
+        interfaceAddress:
+          initialEndpoint || formState.modelInfo.interfaceAddress,
         provider: mapProviderToVendor(initialProvider),
         isThink: formState.modelInfo.isThink ?? false,
       });

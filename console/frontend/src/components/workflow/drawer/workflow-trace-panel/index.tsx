@@ -460,11 +460,7 @@ function WorkflowTracePanel(): React.ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [
-    workflowTracePanelOpen,
-    currentFlow?.flowId,
-    reloadSeq,
-  ]);
+  }, [workflowTracePanelOpen, currentFlow?.flowId, reloadSeq]);
 
   useEffect(() => {
     if (
@@ -505,11 +501,7 @@ function WorkflowTracePanel(): React.ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [
-    workflowTracePanelOpen,
-    currentFlow?.flowId,
-    selectedExecutionId,
-  ]);
+  }, [workflowTracePanelOpen, currentFlow?.flowId, selectedExecutionId]);
 
   const closePanel = (): void => {
     setWorkflowTracePanelOpen(false);
