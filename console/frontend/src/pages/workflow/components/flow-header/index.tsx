@@ -146,7 +146,7 @@ const FlowHeader: React.FC<FlowHeaderProps> = ({ children, currentFlow }) => {
       category: fields.botType,
       flowConfig: config,
     };
-    let advancedConfig = JSON.parse(currentFlow?.advancedConfig);
+    const advancedConfig = JSON.parse(currentFlow?.advancedConfig);
     saveFlowAPI(params).then(data => {
       setModalType('');
       setCurrentFlow(currentFlow => ({

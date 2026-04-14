@@ -548,9 +548,7 @@ function IterativeAmplificationModal(): React.ReactElement {
             {showNodeList && (
               <NodeList
                 noIterator={true}
-                hiddenAliasNames={
-                  isParallelIterator ? ['问答节点'] : []
-                }
+                hiddenAliasNames={isParallelIterator ? ['问答节点'] : []}
                 handleAddNode={handleAddNode}
               />
             )}

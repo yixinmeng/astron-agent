@@ -8,7 +8,6 @@ from workflow.engine.nodes.util.frame_processor import (
     AnthropicFrameProcessor,
     FrameProcessorFactory,
     GoogleFrameProcessor,
-    OpenAIFrameProcessor,
 )
 
 

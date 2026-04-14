@@ -128,7 +128,8 @@ const MultimediaSection = ({
   handleChangeNodeParam,
 }): React.ReactElement => {
   const { t } = useTranslation();
-  const { inputs, handleChangeInputParam, handleAddInputLine, allowAddInput } = useNodeCommon({ id, data });
+  const { inputs, handleChangeInputParam, handleAddInputLine, allowAddInput } =
+    useNodeCommon({ id, data });
   const canvasesDisabled = useFlowsManager(state => state.canvasesDisabled);
 
   return (
@@ -149,7 +150,9 @@ const MultimediaSection = ({
                 className="text-[#6356EA] text-xs font-medium mt-2 inline-flex items-center cursor-pointer gap-1.5"
                 onClick={() => handleAddInputLine()}
               >
-                <span>+ {t('workflow.nodes.largeModelNode.addMultimediaInput')}</span>
+                <span>
+                  + {t('workflow.nodes.largeModelNode.addMultimediaInput')}
+                </span>
               </button>
             )}
 
@@ -161,25 +164,31 @@ const MultimediaSection = ({
                     <input
                       className="border rounded p-1 w-full"
                       value={input?.name || ''}
-                      onChange={(e) =>
+                      onChange={e =>
                         handleChangeInputParam(
                           input.id,
                           (data, val) => (data.name = val),
                           e.target.value
                         )
                       }
-                      placeholder={t('workflow.nodes.largeModelNode.multimediaNamePlaceholder')}
+                      placeholder={t(
+                        'workflow.nodes.largeModelNode.multimediaNamePlaceholder'
+                      )}
                       disabled={canvasesDisabled}
                     />
                   </div>
                   <div className="flex flex-col flex-shrink-0 w-1/4">
                     {canvasesDisabled ? (
-                      <span>{input?.schema?.value?.type === 'literal' ? t('workflow.nodes.common.input') : t('workflow.nodes.common.reference')}</span>
+                      <span>
+                        {input?.schema?.value?.type === 'literal'
+                          ? t('workflow.nodes.common.input')
+                          : t('workflow.nodes.common.reference')}
+                      </span>
                     ) : (
                       <select
                         className="border rounded p-1 w-full"
                         value={input?.schema?.value?.type || 'literal'}
-                        onChange={(e) =>
+                        onChange={e =>
                           handleChangeInputParam(
                             input.id,
                             (data, val) => {
@@ -194,8 +203,12 @@ const MultimediaSection = ({
                           )
                         }
                       >
-                        <option value="literal">{t('workflow.nodes.common.input')}</option>
-                        <option value="ref">{t('workflow.nodes.common.reference')}</option>
+                        <option value="literal">
+                          {t('workflow.nodes.common.input')}
+                        </option>
+                        <option value="ref">
+                          {t('workflow.nodes.common.reference')}
+                        </option>
                       </select>
                     )}
                   </div>
@@ -204,31 +217,37 @@ const MultimediaSection = ({
                       <input
                         className="border rounded p-1 w-full"
                         value={input?.schema?.value?.content || ''}
-                        onChange={(e) =>
+                        onChange={e =>
                           handleChangeInputParam(
                             input.id,
                             (data, val) => (data.schema.value.content = val),
                             e.target.value
                           )
                         }
-                        placeholder={t('workflow.nodes.largeModelNode.multimediaInputPlaceholder')}
+                        placeholder={t(
+                          'workflow.nodes.largeModelNode.multimediaInputPlaceholder'
+                        )}
                         disabled={canvasesDisabled}
                       />
                     ) : (
                       <div>
                         <input
                           className="border rounded p-1 w-full"
-                          value={typeof input?.schema?.value?.content === 'object'
-                            ? JSON.stringify(input?.schema?.value?.content)
-                            : input?.schema?.value?.content || ''}
-                          onChange={(e) =>
+                          value={
+                            typeof input?.schema?.value?.content === 'object'
+                              ? JSON.stringify(input?.schema?.value?.content)
+                              : input?.schema?.value?.content || ''
+                          }
+                          onChange={e =>
                             handleChangeInputParam(
                               input.id,
                               (data, val) => (data.schema.value.content = val),
                               e.target.value
                             )
                           }
-                          placeholder={t('workflow.nodes.largeModelNode.multimediaRefPlaceholder')}
+                          placeholder={t(
+                            'workflow.nodes.largeModelNode.multimediaRefPlaceholder'
+                          )}
                           disabled={canvasesDisabled}
                         />
                       </div>

@@ -143,7 +143,9 @@ def seed_default_tools() -> None:
     """Seed built-in link tools after schema migration."""
     db_service = get_db_engine()
     if db_service is None:
-        logging.warning("Skip link default tool seed because database is not initialized")
+        logging.warning(
+            "Skip link default tool seed because database is not initialized"
+        )
         return
 
     inspector = inspect(db_service.engine)

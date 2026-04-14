@@ -532,14 +532,12 @@ class AgentNode(BaseNode):
                 )
                 inputs.update({input_key: input_value})
 
-            (content_list, reasoning_content_list, token_usage) = (
-                await self._call_agent(
-                    inputs,
-                    variable_pool,
-                    msg_or_end_node_deps,
-                    span,
-                    event_log_node_trace=event_log_node_trace,
-                )
+            content_list, reasoning_content_list, token_usage = await self._call_agent(
+                inputs,
+                variable_pool,
+                msg_or_end_node_deps,
+                span,
+                event_log_node_trace=event_log_node_trace,
             )
 
             outputs = {}

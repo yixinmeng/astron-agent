@@ -9,11 +9,7 @@ from common.otlp.trace.span import Span
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
-from agent.domain.models.base import (
-    AnthropicLLMModel,
-    BaseLLMModel,
-    GoogleLLMModel,
-)
+from agent.domain.models.base import AnthropicLLMModel, BaseLLMModel, GoogleLLMModel
 from agent.engine.nodes.chat.chat_runner import ChatRunner
 from agent.engine.nodes.cot.cot_runner import CotRunner
 from agent.engine.nodes.cot_process.cot_process_runner import CotProcessRunner

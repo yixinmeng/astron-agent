@@ -30,7 +30,8 @@ const translation = {
       newVersionUpdate: 'New version update',
       modelThinkingProcess: 'Model thinking process',
       multimedia: 'Multimedia',
-      multimediaInputPlaceholder: 'Enter multimedia content or select from reference',
+      multimediaInputPlaceholder:
+        'Enter multimedia content or select from reference',
       multimediaRefPlaceholder: 'Select multimedia content from other nodes',
       multimediaNamePlaceholder: 'Parameter name',
       noMultimediaInput: 'No multimedia input configured',
