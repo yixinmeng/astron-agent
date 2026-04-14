@@ -205,7 +205,7 @@ class OpenAIChatAI(ChatAI):
                     cause_error=f"LLM response timeout ({timeout}s)",
                 ) from e
 
-    async def achat(
+    async def achat(  # noqa: C901
         self,
         flow_id: str,
         user_message: list,
@@ -234,14 +234,14 @@ class OpenAIChatAI(ChatAI):
         if multimodal_inputs:
             # Find the last user message to append multimodal content
             last_user_msg_index = -1
-            for i in range(len(user_message)-1, -1, -1):
-                if user_message[i].get('role') == 'user':
+            for i in range(len(user_message) - 1, -1, -1):
+                if user_message[i].get("role") == "user":
                     last_user_msg_index = i
                     break
 
             if last_user_msg_index != -1:
                 # Get the current content of the user message
-                current_content = user_message[last_user_msg_index].get('content', [])
+                current_content = user_message[last_user_msg_index].get("content", [])
 
                 # If current content is a string, convert it to the proper format
                 if isinstance(current_content, str):
@@ -249,33 +249,24 @@ class OpenAIChatAI(ChatAI):
 
                 # Append multimodal content to the existing content
                 for mm_input in multimodal_inputs:
-                    mm_type = mm_input.get('type', '')
-                    mm_url = mm_input.get('url', '')
+                    mm_type = mm_input.get("type", "")
+                    mm_url = mm_input.get("url", "")
 
-                    if mm_type == 'image':
-                        current_content.append({
-                            "type": "image_url",
-                            "image_url": {
-                                "url": mm_url
-                            }
-                        })
-                    elif mm_type == 'audio':
-                        current_content.append({
-                            "type": "input_audio",
-                            "input_audio": {
-                                "url": mm_url
-                            }
-                        })
-                    elif mm_type == 'video':
-                        current_content.append({
-                            "type": "video_url",
-                            "video_url": {
-                                "url": mm_url
-                            }
-                        })
+                    if mm_type == "image":
+                        current_content.append(
+                            {"type": "image_url", "image_url": {"url": mm_url}}
+                        )
+                    elif mm_type == "audio":
+                        current_content.append(
+                            {"type": "input_audio", "input_audio": {"url": mm_url}}
+                        )
+                    elif mm_type == "video":
+                        current_content.append(
+                            {"type": "video_url", "video_url": {"url": mm_url}}
+                        )
 
                 # Update the user message with the new content
-                user_message[last_user_msg_index]['content'] = current_content
+                user_message[last_user_msg_index]["content"] = current_content
 
         # Assemble API URL and log request information
         url = await self.assemble_url(span)

@@ -11,7 +11,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from plugin.link.alembic.default_tools import DEFAULT_TOOL_INSERT_STATEMENTS
 
-from alembic import op
+from alembic import op  # type: ignore[attr-defined]
 
 # revision identifiers, used by Alembic.
 revision: str = "5c4f1b5ab83d"
@@ -24,7 +24,9 @@ def upgrade() -> None:
     op.create_table(
         "tools_schema",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
-        sa.Column("app_id", sa.String(length=32), nullable=True, comment="Application ID"),
+        sa.Column(
+            "app_id", sa.String(length=32), nullable=True, comment="Application ID"
+        ),
         sa.Column("tool_id", sa.String(length=32), nullable=True, comment="Tool ID"),
         sa.Column("name", sa.String(length=128), nullable=True, comment="Tool name"),
         sa.Column(
