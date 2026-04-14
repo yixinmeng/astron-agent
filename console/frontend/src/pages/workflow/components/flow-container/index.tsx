@@ -46,9 +46,7 @@ const shouldIgnoreWorkflowShortcut = (event: KeyboardEvent): boolean => {
   }
 
   return Boolean(
-    target.closest(
-      '.monaco-editor, .monaco-inputbox, [contenteditable="true"]'
-    )
+    target.closest('.monaco-editor, .monaco-inputbox, [contenteditable="true"]')
   );
 };
 

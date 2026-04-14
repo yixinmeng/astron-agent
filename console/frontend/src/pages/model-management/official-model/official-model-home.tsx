@@ -8,7 +8,10 @@ import { ModelProvider, useModelContext } from '../context/model-context';
 import { useModelFilters } from '../hooks/use-model-filters';
 import { ModelProviderType } from '@/types/model';
 import { getModelProviderLabel } from '../utils/provider';
-import { mapProviderToVendor, getSpecificProviderOptions } from '../utils/provider-group';
+import {
+  mapProviderToVendor,
+  getSpecificProviderOptions,
+} from '../utils/provider-group';
 import chatgptIcon from '@/assets/imgs/modelManage/providers/custom/chatgpt.svg';
 import anthropicIcon from '@/assets/imgs/modelManage/providers/custom/anthropic.svg';
 import googleIcon from '@/assets/imgs/modelManage/providers/custom/google.svg';
@@ -157,7 +160,6 @@ const OfficialModelContent: React.FC = () => {
     ],
     [t]
   );
-
 
   const handleOpenProviderModal = (card: OfficialProviderCard): void => {
     actions.setCurrentEditModel(undefined);

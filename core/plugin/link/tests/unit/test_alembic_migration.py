@@ -27,7 +27,6 @@ from plugin.link.extensions.database_migration import (
     _get_or_create_redis_service,
     _handle_migration_error,
     run_database_migration,
-    seed_default_tools,
 )
 from sqlalchemy.exc import OperationalError
 

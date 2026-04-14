@@ -3,7 +3,10 @@ import { Button } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ModelProviderType } from '@/types/model';
 import { getModelProviderLabel } from '../utils/provider';
-import { mapProviderToVendor, getVendorDisplayName } from '../utils/provider-group';
+import {
+  mapProviderToVendor,
+  getVendorDisplayName,
+} from '../utils/provider-group';
 import chatgptIcon from '@/assets/imgs/modelManage/providers/custom/chatgpt.svg';
 import anthropicIcon from '@/assets/imgs/modelManage/providers/custom/anthropic.svg';
 import googleIcon from '@/assets/imgs/modelManage/providers/custom/google.svg';
@@ -23,7 +26,9 @@ interface VendorGroupCardProps {
   onOpenProviderModal: (card: ProviderCard) => void;
 }
 
-const ProviderLogoGlyph: React.FC<{ provider: ModelProviderType }> = ({ provider }) => {
+const ProviderLogoGlyph: React.FC<{ provider: ModelProviderType }> = ({
+  provider,
+}) => {
   const imageLogoMap: Record<ModelProviderType, string> = {
     [ModelProviderType.CHATGPT]: chatgptIcon,
     [ModelProviderType.OPENAI]: chatgptIcon,
@@ -62,18 +67,14 @@ const ProviderCardComponent: React.FC<{
           <h4 className="mt-2 text-lg font-semibold text-gray-900">
             {card.title}
           </h4>
-          <p className="text-sm text-gray-600">
-            {card.subtitle}
-          </p>
+          <p className="text-sm text-gray-600">{card.subtitle}</p>
         </div>
         <div className="w-10 h-10 flex items-center justify-center">
           <ProviderLogoGlyph provider={card.provider} />
         </div>
       </div>
 
-      <p className="text-sm text-gray-700 mb-3">
-        {card.description}
-      </p>
+      <p className="text-sm text-gray-700 mb-3">{card.description}</p>
 
       <Button
         type="primary"
@@ -99,9 +100,7 @@ const VendorGroupCard: React.FC<VendorGroupCardProps> = ({
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900">
-          {vendorName}
-        </h3>
+        <h3 className="text-lg font-semibold text-gray-900">{vendorName}</h3>
       </div>
 
       <div className="p-4">

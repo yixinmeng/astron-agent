@@ -348,10 +348,8 @@ const translation = {
         ignoreErrorOutput: '移除错误输出',
       },
       maxConcurrencyLabel: '最大并行度',
-      parallelModeNoQaInSubCanvas:
-        '并行模式下不支持在迭代子画布中添加问答节点',
-      cannotSwitchToParallelWithQa:
-        '子画布中存在问答节点，无法切换到并行模式',
+      parallelModeNoQaInSubCanvas: '并行模式下不支持在迭代子画布中添加问答节点',
+      cannotSwitchToParallelWithQa: '子画布中存在问答节点，无法切换到并行模式',
     },
     codeNode: {
       type: '代码',

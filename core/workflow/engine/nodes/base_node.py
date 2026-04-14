@@ -1205,7 +1205,9 @@ class BaseLLMNode(BaseNode):
         user_message.extend(filter(None, [image_msg, system_msg, *history, user_msg]))
         return user_message
 
-    def _build_input_to_filetype_map(self, node_protocol: list = None) -> dict:
+    def _build_input_to_filetype_map(
+        self, node_protocol: Optional[list] = None
+    ) -> dict:
         """
         Build the mapping from input names to their fileTypes based on DSL protocol.
 
@@ -1217,8 +1219,8 @@ class BaseLLMNode(BaseNode):
         if node_protocol and isinstance(node_protocol, list):
             for item in node_protocol:
                 if isinstance(item, dict):
-                    file_type = item.get('fileType', '')
-                    input_name = item.get('name', '')
+                    file_type = item.get("fileType", "")
+                    input_name = item.get("name", "")
 
                     # Only add to map if both file_type and input_name exist
                     if file_type and input_name:
@@ -1321,7 +1323,8 @@ class BaseLLMNode(BaseNode):
                     token_usage = token_usage
                     break
                 if (
-                    self.source in {
+                    self.source
+                    in {
                         ModelProviderEnum.OPENAI.value,
                         ModelProviderEnum.ANTHROPIC.value,
                         ModelProviderEnum.GOOGLE.value,

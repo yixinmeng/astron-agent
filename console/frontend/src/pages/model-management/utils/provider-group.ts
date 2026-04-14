@@ -44,7 +44,7 @@ export function getVendorDisplayName(vendor: string): string {
     case ModelProviderType.ANTHROPIC:
       return 'Anthropic'; // Claude
     case ModelProviderType.GOOGLE:
-      return 'Google';    // Gemini
+      return 'Google'; // Gemini
     case ModelProviderType.OPENAI:
     default:
       return 'OpenAI'; // ChatGPT, MiniMax, Zhipu AI, Qwen, etc.
@@ -54,7 +54,10 @@ export function getVendorDisplayName(vendor: string): string {
 /**
  * 获取用于添加模型的厂商选项
  */
-export function getSimpleVendorOptions(): Array<{ label: string; value: string }> {
+export function getSimpleVendorOptions(): Array<{
+  label: string;
+  value: string;
+}> {
   return [
     { label: 'OpenAI', value: ModelProviderType.OPENAI },
     { label: 'Anthropic', value: ModelProviderType.ANTHROPIC },
@@ -76,7 +79,10 @@ export function getVendorOptions(): Array<{ label: string; value: string }> {
 /**
  * 获取所有可用的具体提供商选项（用于官方模型页面）
  */
-export function getSpecificProviderOptions(): Array<{ label: string; value: string }> {
+export function getSpecificProviderOptions(): Array<{
+  label: string;
+  value: string;
+}> {
   return [
     { label: 'ChatGPT (OpenAI)', value: ModelProviderType.CHATGPT },
     { label: 'Claude (Anthropic)', value: ModelProviderType.ANTHROPIC },

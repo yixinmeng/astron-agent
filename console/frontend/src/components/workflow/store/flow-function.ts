@@ -568,7 +568,10 @@ function findReferenceByValue(references, value) {
       return reference;
     }
 
-    const childReference = findReferenceByValue(reference?.children || [], value);
+    const childReference = findReferenceByValue(
+      reference?.children || [],
+      value
+    );
     if (childReference) {
       return childReference;
     }
