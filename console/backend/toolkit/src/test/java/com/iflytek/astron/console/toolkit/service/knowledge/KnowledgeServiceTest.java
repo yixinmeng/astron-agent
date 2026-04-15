@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.iflytek.astron.console.commons.constant.ResponseEnum;
 import com.iflytek.astron.console.commons.exception.BusinessException;
 import com.iflytek.astron.console.toolkit.common.constant.ProjectContent;
+import com.iflytek.astron.console.toolkit.config.properties.BizConfig;
 import com.iflytek.astron.console.toolkit.config.properties.ApiUrl;
 import com.iflytek.astron.console.toolkit.entity.core.knowledge.*;
 import com.iflytek.astron.console.toolkit.entity.mongo.Knowledge;
@@ -1773,6 +1774,17 @@ class KnowledgeServiceTest {
             mockSliceConfig = new SliceConfig();
             mockSliceConfig.setLengthRange(Arrays.asList(300, 800));
             mockSliceConfig.setSeperator(Arrays.asList("\n"));
+
+            // Mirror production wiring so Ragflow-RAG routes through
+            // doCbgUploadSplit instead of the literal-only fallback.
+            BizConfig bizConfig = new BizConfig();
+            bizConfig.setCbgRagCompatibleSources(Arrays.asList("CBG-RAG", "Ragflow-RAG"));
+            new ProjectContent().setBizConfig(bizConfig);
+        }
+
+        @AfterEach
+        void tearDown() {
+            new ProjectContent().setBizConfig(null);
         }
 
         /**
@@ -1823,6 +1835,8 @@ class KnowledgeServiceTest {
             String url = "http://example.com/document.txt";
             mockFileInfo.setSource("CBG-RAG");
             mockFileInfo.setType("text/plain");
+            // Regression guard: CBG-RAG must not forward oldDocId even if lastUuid exists.
+            mockFileInfo.setLastUuid("cbg-previous-doc-id");
 
             KnowledgeResponse response = new KnowledgeResponse();
             response.setCode(0);
@@ -1835,7 +1849,7 @@ class KnowledgeServiceTest {
             response.setData(dataArray);
 
             when(s3Util.getObject(anyString())).thenReturn(new java.io.ByteArrayInputStream("test".getBytes()));
-            when(knowledgeV2ServiceCallHandler.documentUpload(any(), any(), any(), any(), any())).thenReturn(response);
+            when(knowledgeV2ServiceCallHandler.documentUpload(any(), any(), any(), any(), any(), any())).thenReturn(response);
             when(fileInfoV2Service.getById(anyLong())).thenReturn(mockFileInfo);
             when(previewKnowledgeMapper.countByFileId(anyString())).thenReturn(0L);
             when(previewKnowledgeMapper.insertBatch(anyList())).thenReturn(1);
@@ -1847,7 +1861,87 @@ class KnowledgeServiceTest {
 
             // Then
             verify(s3Util, times(1)).getObject(anyString());
-            verify(knowledgeV2ServiceCallHandler, times(1)).documentUpload(any(), any(), any(), any(), any());
+            // CBG-RAG multipart form must not carry documentId.
+            verify(knowledgeV2ServiceCallHandler, times(1)).documentUpload(
+                    any(), any(), any(), any(), any(), isNull());
+        }
+
+        /**
+         * Ragflow-RAG first-time slice: lastUuid=null, oldDocId stays null,
+         * Python uses the legacy create-only path.
+         */
+        @Test
+        @DisplayName("Extract knowledge with Ragflow-RAG source, first slice (lastUuid=null)")
+        void testKnowledgeExtractAsync_RagflowRAG_FirstSlice() {
+            // Given
+            String contentType = "text/plain";
+            String url = "http://example.com/document.txt";
+            mockFileInfo.setSource("Ragflow-RAG");
+            mockFileInfo.setType("text/plain");
+            mockFileInfo.setLastUuid(null); // FIRST slice — no previous doc id
+
+            KnowledgeResponse response = new KnowledgeResponse();
+            response.setCode(0);
+            JSONArray dataArray = new JSONArray();
+            ChunkInfo chunk = new ChunkInfo();
+            chunk.setContent("First slice chunk");
+            chunk.setDocId("ragflow-doc-001");
+            dataArray.add(JSON.parseObject(JSON.toJSONString(chunk)));
+            response.setData(dataArray);
+
+            when(s3Util.getObject(anyString())).thenReturn(new java.io.ByteArrayInputStream("test".getBytes()));
+            when(knowledgeV2ServiceCallHandler.documentUpload(any(), any(), any(), any(), any(), any())).thenReturn(response);
+            when(fileInfoV2Service.getById(anyLong())).thenReturn(mockFileInfo);
+            when(previewKnowledgeMapper.countByFileId(anyString())).thenReturn(0L);
+            when(previewKnowledgeMapper.insertBatch(anyList())).thenReturn(1);
+            when(fileInfoV2Service.updateById(any(FileInfoV2.class))).thenReturn(true);
+            when(extractKnowledgeTaskService.updateById(any(ExtractKnowledgeTask.class))).thenReturn(true);
+
+            // When
+            knowledgeService.knowledgeExtractAsync(contentType, url, mockSliceConfig, mockFileInfo, mockExtractTask);
+
+            // Then: first slice => oldDocId is null (Python side uses legacy path)
+            verify(knowledgeV2ServiceCallHandler, times(1)).documentUpload(
+                    any(), any(), any(), any(), any(), isNull());
+        }
+
+        /**
+         * Ragflow-RAG re-slice: existing lastUuid is forwarded as oldDocId to
+         * trigger the Python upsert path.
+         */
+        @Test
+        @DisplayName("Extract knowledge with Ragflow-RAG source, re-slice forwards lastUuid")
+        void testKnowledgeExtractAsync_RagflowRAG_ReSlice() {
+            // Given
+            String contentType = "text/plain";
+            String url = "http://example.com/document.txt";
+            mockFileInfo.setSource("Ragflow-RAG");
+            mockFileInfo.setType("text/plain");
+            mockFileInfo.setLastUuid("doc-old-ragflow"); // RE-SLICE — has previous doc
+
+            KnowledgeResponse response = new KnowledgeResponse();
+            response.setCode(0);
+            JSONArray dataArray = new JSONArray();
+            ChunkInfo chunk = new ChunkInfo();
+            chunk.setContent("Re-slice chunk");
+            chunk.setDocId("doc-new-ragflow");
+            dataArray.add(JSON.parseObject(JSON.toJSONString(chunk)));
+            response.setData(dataArray);
+
+            when(s3Util.getObject(anyString())).thenReturn(new java.io.ByteArrayInputStream("test".getBytes()));
+            when(knowledgeV2ServiceCallHandler.documentUpload(any(), any(), any(), any(), any(), any())).thenReturn(response);
+            when(fileInfoV2Service.getById(anyLong())).thenReturn(mockFileInfo);
+            when(previewKnowledgeMapper.countByFileId(anyString())).thenReturn(0L);
+            when(previewKnowledgeMapper.insertBatch(anyList())).thenReturn(1);
+            when(fileInfoV2Service.updateById(any(FileInfoV2.class))).thenReturn(true);
+            when(extractKnowledgeTaskService.updateById(any(ExtractKnowledgeTask.class))).thenReturn(true);
+
+            // When
+            knowledgeService.knowledgeExtractAsync(contentType, url, mockSliceConfig, mockFileInfo, mockExtractTask);
+
+            // Then: re-slice => oldDocId passed as the previous doc id
+            verify(knowledgeV2ServiceCallHandler, times(1)).documentUpload(
+                    any(), any(), any(), any(), any(), eq("doc-old-ragflow"));
         }
 
         /**
@@ -2137,7 +2231,7 @@ class KnowledgeServiceTest {
             dealFileResult.setTaskId("task-001");
 
             when(s3Util.getObject(anyString())).thenReturn(new java.io.ByteArrayInputStream("test".getBytes()));
-            when(knowledgeV2ServiceCallHandler.documentUpload(any(), any(), any(), any(), any())).thenReturn(response);
+            when(knowledgeV2ServiceCallHandler.documentUpload(any(), any(), any(), any(), any(), any())).thenReturn(response);
             when(fileInfoV2Service.getById(anyLong())).thenReturn(mockFileInfo);
             when(previewKnowledgeMapper.countByFileId(anyString())).thenReturn(0L);
             when(previewKnowledgeMapper.insertBatch(anyList())).thenReturn(1);

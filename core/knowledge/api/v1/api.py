@@ -226,6 +226,13 @@ async def file_upload(
     separator: Optional[str] = Form(
         None, description='Delimiter JSON array, such as ["\\n", ". "]'
     ),
+    documentId: Optional[str] = Form(
+        None,
+        description=(
+            "Existing RAGFlow doc id, triggers blue-green upsert. "
+            "Omit or leave empty for first-time slicing."
+        ),
+    ),
     app_id: str = Depends(get_app_id),
 ) -> Union[SuccessDataResponse, ErrorResponse]:
     """
@@ -255,6 +262,7 @@ async def file_upload(
                         "ragType": ragType,
                         "lengthRange": lengthRange,
                         "separator": separator,
+                        "documentId": documentId,
                     },
                     ensure_ascii=False,
                 )
@@ -284,6 +292,7 @@ async def file_upload(
             file=file,
             lengthRange=parsed_length_range,
             separator=parsed_separator,
+            document_id=documentId,
         )
 
 
