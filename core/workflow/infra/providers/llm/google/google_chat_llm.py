@@ -11,6 +11,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 # Import Google GenAI SDK (new package name)
 from google.genai import Client
 from google.genai.types import Content, GenerateContentConfig, Part
+from pydantic import Field
 
 from workflow.consts.engine.chat_status import ChatStatus
 from workflow.engine.nodes.entities.llm_response import LLMResponse
@@ -30,6 +31,9 @@ class GoogleChatAI(ChatAI):
     """
 
     model_config = {"arbitrary_types_allowed": True, "protected_namespaces": ()}
+
+    # Google GenAI client instance (declared as field for Pydantic compatibility)
+    client: Optional[Client] = Field(default=None, exclude=True)
 
     def __init__(self, **data: Any) -> None:
         """
@@ -108,7 +112,7 @@ class GoogleChatAI(ChatAI):
                     {
                         "role": "user",
                         "parts": [
-                            Part.from_data(
+                            Part.from_data(  # type: ignore[attr-defined]
                                 mime_type="image/jpeg", data=item.get("content", "")
                             ),
                         ],
@@ -194,7 +198,9 @@ class GoogleChatAI(ChatAI):
                 if isinstance(image_data, str):
                     # Assuming it's base64 encoded image data
                     try:
-                        part = Part.from_data(mime_type="image/jpeg", data=image_data)
+                        part = Part.from_data(  # type: ignore[attr-defined]
+                            mime_type="image/jpeg", data=image_data
+                        )
                         contents.append(Content(role="user", parts=[part]))
                     except Exception as e:
                         # Log error but continue
@@ -286,7 +292,7 @@ class GoogleChatAI(ChatAI):
             usage = {}  # Initialize usage dict
 
             # Use the async streaming method from the client
-            async for chunk in self.client.aio.models.generate_content_stream(
+            async for chunk in self.client.aio.models.generate_content_stream(  # type: ignore[union-attr]
                 model=self.model_name,
                 contents=contents,
                 config=generation_config,
