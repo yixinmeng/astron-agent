@@ -329,6 +329,18 @@ export const createFromTemplate = (params: any) => {
 };
 
 // 获取星辰模版
+export const exportWorkflowTemplate = (params: {
+  workflowId: number | string;
+}): Promise<any> => {
+  return http.post(`/workflow/bot/exportTemplate`, params);
+};
+
+export const deleteWorkflowTemplate = (
+  templateId: number | string
+): Promise<any> => {
+  return http.delete(`/workflow/bot/template/${templateId}`);
+};
+
 export const getStarTemplate = (params: any): Promise<any> => {
   return http.post(`/workflow/bot/templateList`, params);
 };

@@ -2,33 +2,49 @@ package com.iflytek.astron.console.hub.service.workflow.impl;
 
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.iflytek.astron.console.commons.constant.ResponseEnum;
 import com.iflytek.astron.console.commons.dto.bot.BotInfoDto;
 import com.iflytek.astron.console.commons.dto.workflow.CloneSynchronize;
 import com.iflytek.astron.console.commons.entity.bot.ChatBotBase;
 import com.iflytek.astron.console.commons.entity.bot.UserLangChainInfo;
+import com.iflytek.astron.console.commons.entity.workflow.Workflow;
 import com.iflytek.astron.console.commons.exception.BusinessException;
+import com.iflytek.astron.console.commons.response.ApiResult;
 import com.iflytek.astron.console.commons.service.bot.BotService;
 import com.iflytek.astron.console.commons.service.data.UserLangChainDataService;
 import com.iflytek.astron.console.commons.util.MaasUtil;
 import com.iflytek.astron.console.commons.util.space.SpaceInfoUtil;
+import com.iflytek.astron.console.hub.entity.maas.ExportedWorkflowTemplate;
 import com.iflytek.astron.console.hub.entity.maas.MaasDuplicate;
 import com.iflytek.astron.console.hub.entity.maas.MaasTemplate;
+import com.iflytek.astron.console.hub.entity.maas.WorkflowTemplateExportRequest;
 import com.iflytek.astron.console.hub.entity.maas.WorkflowTemplateQueryDto;
 import com.iflytek.astron.console.commons.enums.bot.BotVersionEnum;
+import com.iflytek.astron.console.hub.mapper.ExportedWorkflowTemplateMapper;
 import com.iflytek.astron.console.hub.mapper.MaasTemplateMapper;
+import com.iflytek.astron.console.hub.service.bot.BotAIService;
 import com.iflytek.astron.console.hub.service.workflow.BotMaasService;
+import com.iflytek.astron.console.toolkit.service.workflow.WorkflowExportService;
+import com.iflytek.astron.console.toolkit.service.workflow.WorkflowService;
+import com.iflytek.astron.console.toolkit.tool.DataPermissionCheckTool;
 import jakarta.servlet.http.HttpServletRequest;
+import org.apache.commons.lang3.StringUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @Author cherry
@@ -36,6 +52,8 @@ import java.util.Objects;
 @Service
 @Slf4j
 public class BotMaasServiceImpl implements BotMaasService {
+    private static final String AI_AVATAR_FALLBACK = "Should return fallback content";
+    private static final int TEMPLATE_COVER_TIMEOUT_SECONDS = 20;
 
     @Autowired
     private MaasUtil maasUtil;
@@ -52,8 +70,30 @@ public class BotMaasServiceImpl implements BotMaasService {
     @Autowired
     private MaasTemplateMapper maasTemplateMapper;
 
+    @Autowired
+    private ExportedWorkflowTemplateMapper exportedWorkflowTemplateMapper;
+
+    @Autowired
+    private WorkflowService workflowService;
+
+    @Autowired
+    private WorkflowExportService workflowExportService;
+
+    @Autowired
+    private DataPermissionCheckTool dataPermissionCheckTool;
+
+    @Autowired
+    private BotAIService botAIService;
+
     @Override
     public BotInfoDto createFromTemplate(String uid, MaasDuplicate maasDuplicate, HttpServletRequest request) {
+        if (MaasTemplate.TEMPLATE_SOURCE_EXPORTED.equalsIgnoreCase(maasDuplicate.getTemplateSource())) {
+            return createFromExportedTemplate(maasDuplicate, request);
+        }
+        return createFromOfficialTemplate(uid, maasDuplicate, request);
+    }
+
+    private BotInfoDto createFromOfficialTemplate(String uid, MaasDuplicate maasDuplicate, HttpServletRequest request) {
         Long spaceId = SpaceInfoUtil.getSpaceId();
         // Create an event, consumed by /maasCopySynchronize
         Long maasId = maasDuplicate.getMaasId();
@@ -76,6 +116,39 @@ public class BotMaasServiceImpl implements BotMaasService {
         Integer botId = botInfoDto.getBotId();
         botService.addMaasInfo(uid, res, botId, spaceId);
         botInfoDto.setFlowId(res.getJSONObject("data").getLong("id"));
+        return botInfoDto;
+    }
+
+    private BotInfoDto createFromExportedTemplate(MaasDuplicate maasDuplicate, HttpServletRequest request) {
+        Long templateId = maasDuplicate.getTemplateId();
+        if (templateId == null) {
+            throw new BusinessException(ResponseEnum.PARAMETER_ERROR);
+        }
+
+        ExportedWorkflowTemplate template = exportedWorkflowTemplateMapper.selectOne(
+                withSpaceScope(new LambdaQueryWrapper<ExportedWorkflowTemplate>())
+                        .eq(ExportedWorkflowTemplate::getId, templateId)
+                        .eq(ExportedWorkflowTemplate::getIsDelete, 0));
+        if (template == null || StringUtils.isBlank(template.getSnapshotYaml())) {
+            throw new BusinessException(ResponseEnum.BOT_NOT_EXIST);
+        }
+
+        ApiResult<?> importResult = workflowExportService.importWorkflowFromYaml(
+                new ByteArrayInputStream(template.getSnapshotYaml().getBytes(StandardCharsets.UTF_8)),
+                request);
+        if (importResult.code() != 0 || !(importResult.data() instanceof Workflow importedWorkflow)) {
+            throw new BusinessException(ResponseEnum.WORKFLOW_IMPORT_FAILED);
+        }
+
+        JSONObject ext = JSONObject.parseObject(importedWorkflow.getExt());
+        BotInfoDto botInfoDto = new BotInfoDto();
+        botInfoDto.setBotId(ext == null ? null : ext.getInteger("botId"));
+        botInfoDto.setBotName(importedWorkflow.getName());
+        botInfoDto.setBotDesc(importedWorkflow.getDescription());
+        botInfoDto.setAvatar(importedWorkflow.getAvatarIcon());
+        botInfoDto.setVersion(BotVersionEnum.WORKFLOW.getVersion());
+        botInfoDto.setFlowId(importedWorkflow.getId());
+        botInfoDto.setMaasId(importedWorkflow.getId());
         return botInfoDto;
     }
 
@@ -119,19 +192,141 @@ public class BotMaasServiceImpl implements BotMaasService {
         int pageIndex = queryDto.getPageIndex();
         int pageSize = queryDto.getPageSize();
         pageSize = Math.min(pageSize, 50);
-        Page<MaasTemplate> page = new Page<>(pageIndex, pageSize);
-
-        LambdaQueryWrapper<MaasTemplate> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(MaasTemplate::getIsAct, 1);
-        // Query by groupId
+        LambdaQueryWrapper<MaasTemplate> officialQueryWrapper = new LambdaQueryWrapper<>();
+        officialQueryWrapper.eq(MaasTemplate::getIsAct, 1);
         if (queryDto.getGroupId() != null) {
-            queryWrapper.eq(MaasTemplate::getGroupId, queryDto.getGroupId());
+            officialQueryWrapper.eq(MaasTemplate::getGroupId, queryDto.getGroupId());
         }
-        queryWrapper.orderByDesc(MaasTemplate::getOrderIndex);
+        officialQueryWrapper.orderByDesc(MaasTemplate::getOrderIndex);
 
-        Page<MaasTemplate> resultPage = maasTemplateMapper.selectPage(page, queryWrapper);
+        List<MaasTemplate> mergedTemplates = new ArrayList<>(maasTemplateMapper.selectList(officialQueryWrapper));
+        mergedTemplates.forEach(this::markOfficialTemplate);
 
-        // 4. Return data list of current page
-        return resultPage.getRecords();
+        LambdaQueryWrapper<ExportedWorkflowTemplate> exportedQueryWrapper = new LambdaQueryWrapper<>();
+        exportedQueryWrapper.eq(ExportedWorkflowTemplate::getIsDelete, 0)
+                .orderByDesc(ExportedWorkflowTemplate::getCreateTime);
+        withSpaceScope(exportedQueryWrapper);
+        if (queryDto.getGroupId() != null) {
+            exportedQueryWrapper.eq(ExportedWorkflowTemplate::getGroupId, queryDto.getGroupId());
+        }
+
+        String uid = com.iflytek.astron.console.commons.util.RequestContextUtil.getUID();
+        List<MaasTemplate> exportedTemplates = exportedWorkflowTemplateMapper.selectList(exportedQueryWrapper).stream()
+                .sorted(Comparator.comparing(ExportedWorkflowTemplate::getCreateTime, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(template -> convertExportedTemplate(template, uid))
+                .toList();
+        mergedTemplates.addAll(exportedTemplates);
+
+        int safePageIndex = Math.max(pageIndex, 1);
+        int fromIndex = Math.min((safePageIndex - 1) * pageSize, mergedTemplates.size());
+        int toIndex = Math.min(fromIndex + pageSize, mergedTemplates.size());
+        return mergedTemplates.subList(fromIndex, toIndex);
+    }
+
+    @Override
+    public MaasTemplate exportTemplate(String uid, WorkflowTemplateExportRequest exportRequest) {
+        if (exportRequest == null || exportRequest.getWorkflowId() == null) {
+            throw new BusinessException(ResponseEnum.PARAMETER_ERROR);
+        }
+
+        Workflow workflow = workflowService.getById(exportRequest.getWorkflowId());
+        if (workflow == null) {
+            throw new BusinessException(ResponseEnum.BOT_NOT_EXIST);
+        }
+        dataPermissionCheckTool.checkWorkflowBelong(workflow, SpaceInfoUtil.getSpaceId());
+
+        ExportedWorkflowTemplate template = new ExportedWorkflowTemplate();
+        template.setTitle(workflow.getName());
+        template.setSubtitle(workflow.getDescription());
+        template.setGroupId(workflow.getCategory() == null ? null : Long.valueOf(workflow.getCategory()));
+        template.setSourceWorkflowId(workflow.getId());
+        template.setSnapshotYaml(exportWorkflowSnapshot(workflow));
+        template.setCoverUrl(generateTemplateCover(uid, workflow));
+        template.setCreatorUid(uid);
+        template.setSpaceId(SpaceInfoUtil.getSpaceId());
+        template.setIsDelete((byte) 0);
+        exportedWorkflowTemplateMapper.insert(template);
+
+        return convertExportedTemplate(exportedWorkflowTemplateMapper.selectById(template.getId()), uid);
+    }
+
+    @Override
+    public void deleteTemplate(String uid, Long templateId) {
+        if (templateId == null) {
+            throw new BusinessException(ResponseEnum.PARAMETER_ERROR);
+        }
+
+        ExportedWorkflowTemplate template = exportedWorkflowTemplateMapper.selectOne(
+                withSpaceScope(new LambdaQueryWrapper<ExportedWorkflowTemplate>())
+                        .eq(ExportedWorkflowTemplate::getId, templateId)
+                        .eq(ExportedWorkflowTemplate::getIsDelete, 0));
+        if (template == null) {
+            throw new BusinessException(ResponseEnum.BOT_NOT_EXIST);
+        }
+        if (!Objects.equals(template.getCreatorUid(), uid)) {
+            throw new BusinessException(ResponseEnum.PARAMETER_ERROR);
+        }
+
+        template.setIsDelete((byte) 1);
+        exportedWorkflowTemplateMapper.updateById(template);
+    }
+
+    private void markOfficialTemplate(MaasTemplate template) {
+        template.setTemplateId(template.getId());
+        template.setTemplateSource(MaasTemplate.TEMPLATE_SOURCE_OFFICIAL);
+        template.setDeletable(Boolean.FALSE);
+    }
+
+    private MaasTemplate convertExportedTemplate(ExportedWorkflowTemplate template, String uid) {
+        MaasTemplate result = new MaasTemplate();
+        result.setId(template.getId());
+        result.setTemplateId(template.getId());
+        result.setTitle(template.getTitle());
+        result.setSubtitle(template.getSubtitle());
+        result.setCoverUrl(template.getCoverUrl());
+        result.setGroupId(template.getGroupId());
+        result.setTemplateSource(MaasTemplate.TEMPLATE_SOURCE_EXPORTED);
+        result.setDeletable(Objects.equals(template.getCreatorUid(), uid));
+        result.setCreateTime(template.getCreateTime());
+        result.setUpdateTime(template.getUpdateTime());
+        return result;
+    }
+
+    private String exportWorkflowSnapshot(Workflow workflow) {
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            workflowExportService.exportWorkflowDataAsYaml(workflow, outputStream);
+            return outputStream.toString(StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            log.error("Export workflow template snapshot failed, workflowId={}", workflow.getId(), e);
+            throw new BusinessException(ResponseEnum.WORKFLOW_EXPORT_FAILED);
+        }
+    }
+
+    private String generateTemplateCover(String uid, Workflow workflow) {
+        String fallbackCover = workflow.getAvatarIcon();
+        try {
+            String coverUrl = CompletableFuture
+                    .supplyAsync(() -> botAIService.generateAvatar(uid, workflow.getName(), workflow.getDescription()))
+                    .orTimeout(TEMPLATE_COVER_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                    .exceptionally(ex -> null)
+                    .join();
+            if (StringUtils.isBlank(coverUrl) || AI_AVATAR_FALLBACK.equals(coverUrl)) {
+                return fallbackCover;
+            }
+            return coverUrl;
+        } catch (Exception e) {
+            log.warn("Generate workflow template cover failed, workflowId={}", workflow.getId(), e);
+            return fallbackCover;
+        }
+    }
+
+    private LambdaQueryWrapper<ExportedWorkflowTemplate> withSpaceScope(LambdaQueryWrapper<ExportedWorkflowTemplate> queryWrapper) {
+        Long spaceId = SpaceInfoUtil.getSpaceId();
+        if (spaceId == null) {
+            queryWrapper.isNull(ExportedWorkflowTemplate::getSpaceId);
+        } else {
+            queryWrapper.eq(ExportedWorkflowTemplate::getSpaceId, spaceId);
+        }
+        return queryWrapper;
     }
 }

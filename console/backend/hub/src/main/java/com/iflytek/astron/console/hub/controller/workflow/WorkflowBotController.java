@@ -14,6 +14,7 @@ import com.iflytek.astron.console.commons.util.RequestContextUtil;
 import com.iflytek.astron.console.hub.entity.WorkflowTemplateGroup;
 import com.iflytek.astron.console.hub.entity.maas.MaasDuplicate;
 import com.iflytek.astron.console.hub.entity.maas.MaasTemplate;
+import com.iflytek.astron.console.hub.entity.maas.WorkflowTemplateExportRequest;
 import com.iflytek.astron.console.hub.entity.maas.WorkflowTemplateQueryDto;
 import com.iflytek.astron.console.hub.service.workflow.BotMaasService;
 import com.iflytek.astron.console.hub.service.workflow.WorkflowTemplateGroupService;
@@ -75,6 +76,22 @@ public class WorkflowBotController {
     public ApiResult<List<MaasTemplate>> templateList(HttpServletRequest request,
             @RequestBody WorkflowTemplateQueryDto queryDto) {
         return ApiResult.success(botMaasService.templateList(queryDto));
+    }
+
+    @PostMapping("/exportTemplate")
+    @Operation(summary = "workflow template", description = "Export workflow as template")
+    public ApiResult<MaasTemplate> exportTemplate(HttpServletRequest request,
+            @RequestBody WorkflowTemplateExportRequest exportRequest) {
+        String uid = RequestContextUtil.getUID();
+        return ApiResult.success(botMaasService.exportTemplate(uid, exportRequest));
+    }
+
+    @DeleteMapping("/template/{id}")
+    @Operation(summary = "workflow template", description = "Delete exported workflow template")
+    public ApiResult<Void> deleteTemplate(HttpServletRequest request, @PathVariable("id") Long templateId) {
+        String uid = RequestContextUtil.getUID();
+        botMaasService.deleteTemplate(uid, templateId);
+        return ApiResult.success();
     }
 
     @PostMapping("/get-inputs-type")

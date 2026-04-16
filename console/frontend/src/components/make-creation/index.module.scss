@@ -75,7 +75,7 @@
 
         .title_right_text_line {
           &::after {
-            content: "";
+            content: '';
             display: block;
             width: 1px;
             height: 14px;
@@ -90,7 +90,8 @@
           cursor: pointer;
           width: 11px;
           height: 11px;
-          background: url(../../../assets/imgs/bot-center/new-close-icon.svg) center no-repeat;
+          background: url(../../../assets/imgs/bot-center/new-close-icon.svg)
+            center no-repeat;
           background-size: 17px 15px;
         }
       }
@@ -132,12 +133,12 @@
           word-break: keep-all;
         }
         &:hover {
-          color: #6356EA;
+          color: #6356ea;
           background: #ffffff;
         }
       }
       .agent_Template_Tab_item_active {
-        color: #6356EA;
+        color: #6356ea;
         background: #ffffff;
       }
     }
@@ -248,9 +249,9 @@
             min-height: 85px;
 
             :global {
-              .ant-input-affix-wrapper:not(.ant-input-affix-wrapper-focused):not(
-                  .ant-input-affix-wrapper-status-error
-                ) {
+              .ant-input-affix-wrapper:not(
+                  .ant-input-affix-wrapper-focused
+                ):not(.ant-input-affix-wrapper-status-error) {
                 border-color: transparent;
               }
             }
@@ -310,6 +311,27 @@
               background-color: #fff !important;
             }
           }
+          .templateDeleteBtn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 2;
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.92);
+            color: #7f7f7f;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(17, 24, 39, 0.12);
+
+            &:hover {
+              color: #f74e43;
+            }
+          }
           .agent_img {
             width: 100%;
             height: 136px;
@@ -325,7 +347,7 @@
             transition: all 0.3s ease;
             width: 100%;
             height: 36px;
-            background: #6356EA;
+            background: #6356ea;
             margin-top: 4px;
             border-radius: 10px;
             border: none;
@@ -365,7 +387,7 @@
             width: 261px;
             height: 234px;
             //border: 1.5px solid #eaeaea;
-            background-image: url("~assets/imgs/bot-center/top-img1.png");
+            background-image: url('~assets/imgs/bot-center/top-img1.png');
             background-repeat: no-repeat;
             background-position: top;
             border-radius: 16px;
@@ -468,7 +490,7 @@
             border-radius: 16px;
             backdrop-filter: blur(10px);
             padding: 14px 17px 8px 17px;
-            background-image: url("~assets/imgs/bot-center/bottom-right-bg.png");
+            background-image: url('~assets/imgs/bot-center/bottom-right-bg.png');
             background-repeat: no-repeat;
             background-position: bottom right;
             background-size: 85px 92px;
@@ -549,7 +571,7 @@
 
                     &::after {
                       position: absolute;
-                      content: "";
+                      content: '';
                       display: block;
                       width: 12px;
                       height: 12px;

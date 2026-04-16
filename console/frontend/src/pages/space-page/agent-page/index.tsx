@@ -38,7 +38,10 @@ import { handleShare } from '@/utils';
 import { PlusOutlined } from '@ant-design/icons';
 
 import VirtualConfig from '@/components/virtual-config-modal';
-import { upgradeWorkflow } from '@/services/spark-common';
+import {
+  exportWorkflowTemplate,
+  upgradeWorkflow,
+} from '@/services/spark-common';
 
 dayjs.extend(utc);
 
@@ -661,6 +664,35 @@ function index() {
                                 >
                                   {t('agentPage.agentPage.copy')}
                                 </div>
+                                {k?.version === 3 && (
+                                  <div
+                                    className="p-1 rounded hover:bg-[#F2F5FE] block"
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      setOperationId(null);
+                                      exportWorkflowTemplate({
+                                        workflowId: k?.maasId,
+                                      })
+                                        .then(() => {
+                                          message.success(
+                                            t(
+                                              'agentPage.agentPage.exportTemplateSuccess'
+                                            )
+                                          );
+                                        })
+                                        .catch((err: any) => {
+                                          message.error(
+                                            err?.message ||
+                                              t(
+                                                'agentPage.agentPage.exportTemplateFailed'
+                                              )
+                                          );
+                                        });
+                                    }}
+                                  >
+                                    {t('agentPage.agentPage.exportTemplate')}
+                                  </div>
+                                )}
                                 {k?.version === 3 && (
                                   <a
                                     className="p-1 rounded hover:bg-[#F2F5FE] block"
