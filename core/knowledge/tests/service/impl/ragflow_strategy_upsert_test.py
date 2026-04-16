@@ -10,6 +10,7 @@ Covers:
 """
 
 import inspect
+from typing import Any, Literal
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -24,7 +25,7 @@ from knowledge.service.impl.ragflow_strategy import RagflowRAGStrategy
 
 
 @pytest.mark.asyncio
-async def test_safe_delete_document_log_only_true_swallows_non_zero_code():
+async def test_safe_delete_document_log_only_true_swallows_non_zero_code() -> None:
     """log_only=True + RAGFlow returns non-zero code => NO exception."""
     strategy = RagflowRAGStrategy()
     with patch(
@@ -38,7 +39,7 @@ async def test_safe_delete_document_log_only_true_swallows_non_zero_code():
 
 
 @pytest.mark.asyncio
-async def test_safe_delete_document_log_only_false_raises_on_non_zero_code():
+async def test_safe_delete_document_log_only_false_raises_on_non_zero_code() -> None:
     """log_only=False + RAGFlow returns non-zero code => CustomException."""
     strategy = RagflowRAGStrategy()
     with patch(
@@ -53,7 +54,7 @@ async def test_safe_delete_document_log_only_false_raises_on_non_zero_code():
 
 
 @pytest.mark.asyncio
-async def test_safe_delete_document_success_returns_silently():
+async def test_safe_delete_document_success_returns_silently() -> None:
     """RAGFlow returns code == 0 => success, no exception for either mode."""
     strategy = RagflowRAGStrategy()
     with patch(
@@ -74,7 +75,9 @@ async def test_safe_delete_document_success_returns_silently():
 
 
 @pytest.mark.asyncio
-async def test_upsert_document_happy_path_deletes_old_returns_new(monkeypatch):
+async def test_upsert_document_happy_path_deletes_old_returns_new(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Upload OK + parse OK + fetch chunks OK + delete old OK =>
     returns (pending_doc_id, chunks_data) tuple."""
     strategy = RagflowRAGStrategy()
@@ -82,7 +85,9 @@ async def test_upsert_document_happy_path_deletes_old_returns_new(monkeypatch):
     new_doc_id = "new-doc-abc"
     fake_chunks = [{"id": "c1", "content": "hello world"}]
 
-    async def fake_get_chunks(dataset_id, doc_id, **kwargs):
+    async def fake_get_chunks(
+        dataset_id: str, doc_id: str, **kwargs: Any
+    ) -> list[dict[str, str]]:
         return fake_chunks
 
     monkeypatch.setattr(
@@ -123,7 +128,7 @@ async def test_upsert_document_happy_path_deletes_old_returns_new(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_upsert_document_upload_fails_no_delete_called():
+async def test_upsert_document_upload_fails_no_delete_called() -> None:
     """Upload raises => exception propagates, _safe_delete_document NOT called."""
     strategy = RagflowRAGStrategy()
     upload_error = ValueError("S3 unreachable")
@@ -157,16 +162,18 @@ async def test_upsert_document_upload_fails_no_delete_called():
 
 
 @pytest.mark.asyncio
-async def test_upsert_document_parse_fails_deletes_pending_not_old():
+async def test_upsert_document_parse_fails_deletes_pending_not_old() -> None:
     """Upload OK + parse fails => delete PENDING doc, propagate parse error,
     OLD doc stays alive (DB.lastUuid unchanged)."""
     strategy = RagflowRAGStrategy()
     pending_doc_id = "pending-doc-new"
     parse_error = ValueError("parse timeout")
 
-    delete_calls = []
+    delete_calls: list[tuple[str, str, bool]] = []
 
-    async def mock_safe_delete(dataset_id, doc_id, log_only=False):
+    async def mock_safe_delete(
+        dataset_id: str, doc_id: str, log_only: bool = False
+    ) -> None:
         delete_calls.append((dataset_id, doc_id, log_only))
 
     with (
@@ -199,8 +206,8 @@ async def test_upsert_document_parse_fails_deletes_pending_not_old():
 
 @pytest.mark.asyncio
 async def test_upsert_document_delete_old_failure_raises_and_preserves_db_state(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Commit-phase old-doc delete failure must fail the upsert.
 
     Returning success here would advance Java's lastUuid to the new doc while
@@ -211,7 +218,9 @@ async def test_upsert_document_delete_old_failure_raises_and_preserves_db_state(
     new_doc_id = "new-doc-ok"
     fake_chunks = [{"id": "c1", "content": "chunk content"}]
 
-    async def fake_get_chunks(dataset_id, doc_id, **kwargs):
+    async def fake_get_chunks(
+        dataset_id: str, doc_id: str, **kwargs: Any
+    ) -> list[dict[str, str]]:
         return fake_chunks
 
     monkeypatch.setattr(
@@ -252,18 +261,22 @@ async def test_upsert_document_delete_old_failure_raises_and_preserves_db_state(
 
 
 @pytest.mark.asyncio
-async def test_upsert_document_get_chunks_raises_rolls_back_pending(monkeypatch):
+async def test_upsert_document_get_chunks_raises_rolls_back_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Fetch raise => rollback pending, preserve old doc, re-raise."""
     strategy = RagflowRAGStrategy()
     pending_doc_id = "pending-doc-abc"
     fetch_error = ValueError("RAGFlow index not ready")
 
-    delete_calls = []
+    delete_calls: list[tuple[str, str, bool]] = []
 
-    async def mock_safe_delete(dataset_id, doc_id, log_only=False):
+    async def mock_safe_delete(
+        dataset_id: str, doc_id: str, log_only: bool = False
+    ) -> None:
         delete_calls.append((dataset_id, doc_id, log_only))
 
-    async def mock_get_chunks(dataset_id, doc_id, **kwargs):
+    async def mock_get_chunks(dataset_id: str, doc_id: str, **kwargs: Any) -> Any:
         raise fetch_error
 
     monkeypatch.setattr(
@@ -300,17 +313,23 @@ async def test_upsert_document_get_chunks_raises_rolls_back_pending(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_upsert_document_get_chunks_empty_rolls_back_pending(monkeypatch):
+async def test_upsert_document_get_chunks_empty_rolls_back_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Fetch returns [] => treat as failure, rollback pending, preserve old doc."""
     strategy = RagflowRAGStrategy()
     pending_doc_id = "pending-doc-xyz"
 
-    delete_calls = []
+    delete_calls: list[tuple[str, str, bool]] = []
 
-    async def mock_safe_delete(dataset_id, doc_id, log_only=False):
+    async def mock_safe_delete(
+        dataset_id: str, doc_id: str, log_only: bool = False
+    ) -> None:
         delete_calls.append((dataset_id, doc_id, log_only))
 
-    async def mock_get_chunks_empty(dataset_id, doc_id, **kwargs):
+    async def mock_get_chunks_empty(
+        dataset_id: str, doc_id: str, **kwargs: Any
+    ) -> list[Any]:
         return []  # simulate the silent-failure path in ragflow_utils.py:344-346
 
     monkeypatch.setattr(
@@ -358,15 +377,17 @@ async def test_upsert_document_get_chunks_empty_rolls_back_pending(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_split_document_id_none_uses_legacy_create_only_path(monkeypatch):
+async def test_split_document_id_none_uses_legacy_create_only_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """split(document_id=None) => _upsert_document NOT called, legacy path used."""
     strategy = RagflowRAGStrategy()
     file_input = object()
 
-    async def fake_ensure_dataset(group):
+    async def fake_ensure_dataset(group: str) -> str:
         return "ds-1"
 
-    async def fake_get_document_chunks(dataset_id, doc_id):
+    async def fake_get_document_chunks(dataset_id: str, doc_id: str) -> list[Any]:
         return []
 
     monkeypatch.setattr(
@@ -407,7 +428,9 @@ async def test_split_document_id_none_uses_legacy_create_only_path(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_split_document_id_set_uses_upsert_path(monkeypatch):
+async def test_split_document_id_set_uses_upsert_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """split(document_id='doc-old') => _upsert_document called, legacy path not.
 
     _upsert_document returns a (doc_id, chunks) tuple that split() unpacks
@@ -418,10 +441,10 @@ async def test_split_document_id_set_uses_upsert_path(monkeypatch):
     strategy = RagflowRAGStrategy()
     file_input = object()
 
-    async def fake_ensure_dataset(group):
+    async def fake_ensure_dataset(group: str) -> str:
         return "ds-1"
 
-    async def fake_get_document_chunks(dataset_id, doc_id):
+    async def fake_get_document_chunks(dataset_id: str, doc_id: str) -> list[Any]:
         return []
 
     monkeypatch.setattr(
@@ -462,11 +485,13 @@ async def test_split_document_id_set_uses_upsert_path(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_split_preserves_custom_exception_from_upsert(monkeypatch):
+async def test_split_preserves_custom_exception_from_upsert(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """split() must preserve domain errors so API returns the right code."""
     strategy = RagflowRAGStrategy()
 
-    async def fake_ensure_dataset(group):
+    async def fake_ensure_dataset(group: str) -> str:
         return "ds-1"
 
     monkeypatch.setattr(
@@ -492,7 +517,9 @@ async def test_split_preserves_custom_exception_from_upsert(monkeypatch):
 # ----------------------------------------------------------------------
 
 
-def _build_test_app_for_upload(monkeypatch):
+def _build_test_app_for_upload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Any, Any]:
     """Build a minimal FastAPI app that mounts rag_router for TestClient use.
 
     The production api.py exposes `rag_router` as an APIRouter with prefix
@@ -511,33 +538,35 @@ def _build_test_app_for_upload(monkeypatch):
     class _StubSpanCtx:
         sid = "test-sid"
 
-        def add_info_events(self, *_args, **_kwargs):
+        def add_info_events(self, *_args: Any, **_kwargs: Any) -> None:
             pass
 
-        def record_exception(self, *_args, **_kwargs):
+        def record_exception(self, *_args: Any, **_kwargs: Any) -> None:
             pass
 
     class _StubSpan:
-        def start(self, *_args, **_kwargs):
+        def start(self, *_args: Any, **_kwargs: Any) -> Any:
             stub = _StubSpanCtx()
 
             class _Cm:
-                def __enter__(self_inner):
+                def __enter__(self_inner: Any) -> _StubSpanCtx:
                     return stub
 
-                def __exit__(self_inner, *exc):
+                def __exit__(self_inner: Any, *exc: Any) -> Literal[False]:
                     return False
 
             return _Cm()
 
     class _StubMetric:
-        def in_success_count(self):
+        def in_success_count(self) -> None:
             pass
 
-        def in_error_count(self, *_args, **_kwargs):
+        def in_error_count(self, *_args: Any, **_kwargs: Any) -> None:
             pass
 
-    def fake_get_span_and_metric(app_id: str, function_name: str = "unknown"):
+    def fake_get_span_and_metric(
+        app_id: str, function_name: str = "unknown"
+    ) -> tuple[_StubSpan, _StubMetric]:
         return _StubSpan(), _StubMetric()
 
     monkeypatch.setattr(api_module, "get_span_and_metric", fake_get_span_and_metric)
@@ -550,17 +579,17 @@ def _build_test_app_for_upload(monkeypatch):
 
 
 def test_file_upload_endpoint_no_document_id_passes_none_to_strategy(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """POST /knowledge/v1/document/upload WITHOUT documentId form field =>
     strategy.split receives document_id=None."""
     from fastapi.testclient import TestClient
 
     app, api_module = _build_test_app_for_upload(monkeypatch)
 
-    captured = {}
+    captured: dict[str, Any] = {}
 
-    async def fake_split(self, **kwargs):
+    async def fake_split(self: Any, **kwargs: Any) -> list[Any]:
         captured.update(kwargs)
         # strip out the span kwarg that handle_rag_operation injects
         captured.pop("span", None)
@@ -592,17 +621,17 @@ def test_file_upload_endpoint_no_document_id_passes_none_to_strategy(
 
 
 def test_file_upload_endpoint_with_document_id_passes_value_to_strategy(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """POST /knowledge/v1/document/upload WITH documentId=doc-old =>
     strategy.split receives document_id='doc-old'."""
     from fastapi.testclient import TestClient
 
     app, api_module = _build_test_app_for_upload(monkeypatch)
 
-    captured = {}
+    captured: dict[str, Any] = {}
 
-    async def fake_split(self, **kwargs):
+    async def fake_split(self: Any, **kwargs: Any) -> list[Any]:
         captured.update(kwargs)
         captured.pop("span", None)
         return []
@@ -638,13 +667,13 @@ def test_file_upload_endpoint_with_document_id_passes_value_to_strategy(
 # delete the tests.
 
 
-def _split_signature_accepts_var_keyword(strategy_cls):
+def _split_signature_accepts_var_keyword(strategy_cls: type[Any]) -> bool:
     """Return True iff strategy_cls.split() has a **kwargs (VAR_KEYWORD) param."""
     sig = inspect.signature(strategy_cls.split)
     return any(p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
 
 
-def test_aiui_strategy_split_accepts_var_keyword_for_forward_compat():
+def test_aiui_strategy_split_accepts_var_keyword_for_forward_compat() -> None:
     """AIUI strategy must keep **kwargs so document_id is silently ignored."""
     from knowledge.service.impl.aiui_strategy import AIUIRAGStrategy
 
@@ -654,7 +683,7 @@ def test_aiui_strategy_split_accepts_var_keyword_for_forward_compat():
     )
 
 
-def test_cbg_strategy_split_accepts_var_keyword_for_forward_compat():
+def test_cbg_strategy_split_accepts_var_keyword_for_forward_compat() -> None:
     """CBG strategy must keep **kwargs so document_id is silently ignored."""
     from knowledge.service.impl.cbg_strategy import CBGRAGStrategy
 
@@ -664,7 +693,7 @@ def test_cbg_strategy_split_accepts_var_keyword_for_forward_compat():
     )
 
 
-def test_sparkdesk_strategy_split_accepts_var_keyword_for_forward_compat():
+def test_sparkdesk_strategy_split_accepts_var_keyword_for_forward_compat() -> None:
     """SparkDesk strategy must keep **kwargs so document_id is silently ignored."""
     from knowledge.service.impl.sparkdesk_strategy import SparkDeskRAGStrategy
 

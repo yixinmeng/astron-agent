@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Modal, Form, message, Spin, Dropdown, Tooltip } from 'antd';
+import { Modal, message, Spin, Dropdown, Tooltip } from 'antd';
 import {
   submitBotBaseInfo,
   createFromTemplate,
+  deleteWorkflowTemplate,
   getStarTemplate,
   getStarTemplateGroup,
 } from '@/services/spark-common';
 import { useTranslation } from 'react-i18next';
 import { useSpaceType } from '@/hooks/use-space-type';
 import WorkflowImportModal from './components/WorkflowImportModal';
-import { PlusOutlined } from '@ant-design/icons';
+import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
 import ai_kefu from '@/assets/imgs/create-bot-v2/ai_kefu.png';
 import workflowImportIcon from '@/assets/imgs/workflow/workflow-import-icon.svg';
 
@@ -49,7 +50,12 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
       inputExample: ['', '', ''],
     };
     if (flag) {
-      req['maasId'] = item.maasId;
+      req['templateSource'] = item.templateSource;
+      if (item.templateSource === 'EXPORTED') {
+        req['templateId'] = item.templateId || item.id;
+      } else {
+        req['maasId'] = item.maasId;
+      }
       req['name'] = item.title + Date.now();
       await createFromTemplate(req)
         .then((res: any) => {
@@ -68,6 +74,17 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
         });
     }
     setAddAgentTemplateLoading(false);
+  };
+
+  const deleteTemplateCard = async (templateId: number | string) => {
+    await deleteWorkflowTemplate(templateId)
+      .then(() => {
+        message.success(t('createAgent1.templateDeleteSuccess'));
+        getStarTemplateList(activeTab);
+      })
+      .catch((e: any) => {
+        message.error(e?.message || t('createAgent1.templateDeleteFailed'));
+      });
   };
 
   // ai 记账智能体 bodId,
@@ -114,14 +131,17 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
     getStarTemplateList(id);
   };
 
-  useEffect(() => {
-    getTemplateTypeList(); // 获取工作流模板分类
-    getStarTemplateList(); // 星辰模板
-  }, []);
-  //工作流创建分类
   const [activeTab, setActiveTab] = useState<any>(null);
   const [modalList, setModalList] = useState<any[]>([]);
   const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+    getTemplateTypeList();
+    getStarTemplateList(activeTab);
+  }, [visible]);
 
   return (
     <div className={styles.create_modal}>
@@ -138,7 +158,7 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
         centered
         onCancel={onCancel}
         afterClose={() => {
-          setActiveTab(0);
+          setActiveTab(null);
         }}
       >
         <Spin style={{ maxHeight: '654px' }} spinning={addAgentTemplateLoading}>
@@ -274,9 +294,16 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
 
                     {/* --------------- 模板创建 -------------------- */}
                     {starModeShowList.map((item, index) => {
+                      const cover =
+                        item?.cover_url || item?.coverUrl || ai_kefu;
+                      const description =
+                        item?.subtitle ||
+                        item?.coreAbilities?.description ||
+                        '';
+                      const templateKey = `${item.templateSource || 'OFFICIAL'}-${item.templateId || item.maasId || item.id || index}`;
                       return (
                         <div
-                          key={item.maasId}
+                          key={templateKey}
                           className={styles.agentType_Type_content}
                           ref={ref => (mouseNowPageRef.current[index] = ref)}
                           onMouseLeave={() => {
@@ -286,6 +313,18 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
                             setCreateButton(index);
                           }}
                         >
+                          {item?.deletable && (
+                            <button
+                              className={styles.templateDeleteBtn}
+                              onClick={e => {
+                                e.stopPropagation();
+                                deleteTemplateCard(item.templateId || item.id);
+                              }}
+                              title={t('createAgent1.deleteTemplate')}
+                            >
+                              <CloseOutlined />
+                            </button>
+                          )}
                           <div
                             ref={ref => (firstPageRef.current[index] = ref)}
                             className={styles.wrapper_agentType_Type}
@@ -295,10 +334,7 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
                             }}
                           >
                             <div className={styles.agent_img}>
-                              <img
-                                src={item?.cover_url ? item.cover_url : ai_kefu}
-                                alt=""
-                              />
+                              <img src={cover} alt="" />
                             </div>
                             <div className={styles.agent_bottom}>
                               <div className={styles.agent_center_title}>
@@ -331,7 +367,7 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
                                     width: '100%',
                                   }}
                                 >
-                                  {item?.coreAbilities?.description}
+                                  {description}
                                 </div>
                               )}
                             </div>
