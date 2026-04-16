@@ -93,7 +93,7 @@ public class BotMaasServiceImpl implements BotMaasService {
     public BotInfoDto createFromTemplate(String uid, MaasDuplicate maasDuplicate, HttpServletRequest request) {
         if (maasDuplicate.getTemplateId() != null
                 || MaasTemplate.TEMPLATE_SOURCE_EXPORTED.equalsIgnoreCase(maasDuplicate.getTemplateSource())) {
-            return createFromExportedTemplate(maasDuplicate, request);
+            return createFromExportedTemplate(uid, maasDuplicate, request);
         }
         return createFromOfficialTemplate(uid, maasDuplicate, request);
     }
@@ -124,16 +124,13 @@ public class BotMaasServiceImpl implements BotMaasService {
         return botInfoDto;
     }
 
-    private BotInfoDto createFromExportedTemplate(MaasDuplicate maasDuplicate, HttpServletRequest request) {
+    private BotInfoDto createFromExportedTemplate(String uid, MaasDuplicate maasDuplicate, HttpServletRequest request) {
         Long templateId = maasDuplicate.getTemplateId();
         if (templateId == null) {
             throw new BusinessException(ResponseEnum.PARAMETER_ERROR);
         }
 
-        ExportedWorkflowTemplate template = exportedWorkflowTemplateMapper.selectOne(
-                withSpaceScope(new LambdaQueryWrapper<ExportedWorkflowTemplate>())
-                        .eq(ExportedWorkflowTemplate::getId, templateId)
-                        .eq(ExportedWorkflowTemplate::getIsDelete, 0));
+        ExportedWorkflowTemplate template = loadAvailableTemplate(uid, templateId);
         if (template == null || StringUtils.isBlank(template.getSnapshotYaml())) {
             throw new BusinessException(ResponseEnum.BOT_NOT_EXIST);
         }
@@ -155,6 +152,41 @@ public class BotMaasServiceImpl implements BotMaasService {
         botInfoDto.setFlowId(importedWorkflow.getId());
         botInfoDto.setMaasId(importedWorkflow.getId());
         return botInfoDto;
+    }
+
+    private ExportedWorkflowTemplate loadAvailableTemplate(String uid, Long templateId) {
+        ExportedWorkflowTemplate template = exportedWorkflowTemplateMapper.selectById(templateId);
+        if (template == null || !Objects.equals(template.getIsDelete(), (byte) 0)) {
+            return null;
+        }
+
+        Long currentSpaceId = SpaceInfoUtil.getSpaceId();
+        boolean currentSpaceMatched = Objects.equals(template.getSpaceId(), currentSpaceId);
+        boolean currentUserMatched = Objects.equals(template.getCreatorUid(), uid);
+        if (!currentSpaceMatched && !currentUserMatched) {
+            return null;
+        }
+
+        if (StringUtils.isNotBlank(template.getSnapshotYaml())) {
+            return template;
+        }
+
+        if (template.getSourceWorkflowId() == null) {
+            return template;
+        }
+
+        Workflow sourceWorkflow = workflowService.getById(template.getSourceWorkflowId());
+        if (sourceWorkflow == null) {
+            return template;
+        }
+
+        try {
+            template.setSnapshotYaml(exportWorkflowSnapshot(sourceWorkflow));
+            exportedWorkflowTemplateMapper.updateById(template);
+        } catch (Exception e) {
+            log.warn("Repair exported workflow template snapshot failed, templateId={}", templateId, e);
+        }
+        return template;
     }
 
     @Override
