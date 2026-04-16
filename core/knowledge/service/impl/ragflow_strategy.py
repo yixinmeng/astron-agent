@@ -270,13 +270,9 @@ class RagflowRAGStrategy(RAGStrategy):
                     file_input, dataset_id, document_id
                 )
             else:
-                doc_id = await self._process_document_upload(
-                    file_input, dataset_id
-                )
+                doc_id = await self._process_document_upload(file_input, dataset_id)
                 await self._handle_document_parsing(dataset_id, doc_id)
-                chunks_data = await RagflowUtils.get_document_chunks(
-                    dataset_id, doc_id
-                )
+                chunks_data = await RagflowUtils.get_document_chunks(dataset_id, doc_id)
 
             # Step 7: Convert to standard format
             result = RagflowUtils.convert_to_standard_format(doc_id, chunks_data)
