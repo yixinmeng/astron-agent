@@ -273,9 +273,6 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
                         item?.subtitle ||
                         item?.coreAbilities?.description ||
                         '';
-                      const categoryName = isEnglish
-                        ? item?.groupNameEn || item?.groupName
-                        : item?.groupName || item?.groupNameEn;
                       const templateKey = `${item.templateSource || 'EXPORTED'}-${item.templateId || item.id || index}`;
 
                       return (
@@ -305,11 +302,6 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
                               <img src={cover} alt="" />
                             </div>
                             <div className={styles.agent_bottom}>
-                              {categoryName && (
-                                <div className={styles.templateTag}>
-                                  {categoryName}
-                                </div>
-                              )}
                               <div className={styles.agent_center_title}>
                                 <div className={styles.agent_center_title_left}>
                                   <p
