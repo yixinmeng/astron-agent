@@ -525,9 +525,17 @@ public class KnowledgeService {
 
             Integer resourceType = ProjectContent.HTML_FILE_TYPE.equals(fileInfoV2.getType()) ? 1 : 0;
 
+            // Only Ragflow-RAG forwards a previous doc id for upsert; CBG-RAG
+            // shares this method but its request body must stay unchanged.
+            String oldDocId =
+                    ProjectContent.FILE_SOURCE_RAG_FLOW_RAG_STR.equals(fileInfoV2.getSource())
+                            ? fileInfoV2.getLastUuid()
+                            : null;
+
             return knowledgeV2ServiceCallHandler.documentUpload(
                     multipartFile, sliceConfig.getLengthRange(), separator,
-                    fileInfoV2.getSource(), resourceType);
+                    fileInfoV2.getSource(), resourceType,
+                    oldDocId);
 
         } catch (Exception e) {
             log.error("Failed to upload file for chunking: {}", e.getMessage(), e);

@@ -7,6 +7,7 @@ import com.iflytek.astron.console.toolkit.entity.core.knowledge.*;
 import com.iflytek.astron.console.toolkit.util.OkHttpUtil;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
 import org.springframework.web.multipart.MultipartFile;
@@ -46,16 +47,18 @@ public class KnowledgeV2ServiceCallHandler {
      * @param separator separator list
      * @param ragType RAG type
      * @param resourceType resource type (0=file, 1=html)
+     * @param oldDocId existing RAGFlow doc id for upsert; null for first slice
      * @return KnowledgeResponse
      */
     public KnowledgeResponse documentUpload(MultipartFile multipartFile,
             List<Integer> lengthRange, List<String> separator,
-            String ragType, Integer resourceType) {
+            String ragType, Integer resourceType,
+            String oldDocId) {
         String url = apiUrl.getKnowledgeUrl().concat("/v1/document/upload");
 
         try {
-            log.info("documentUpload fileName: {}, fileSize: {} bytes",
-                    multipartFile.getOriginalFilename(), multipartFile.getSize());
+            log.info("documentUpload fileName: {}, fileSize: {} bytes, oldDocId: {}",
+                    multipartFile.getOriginalFilename(), multipartFile.getSize(), oldDocId);
 
             Map<String, Object> params = new HashMap<>();
             params.put("file", multipartFile);
@@ -68,6 +71,9 @@ public class KnowledgeV2ServiceCallHandler {
             params.put("ragType", ragType);
             if (resourceType != null) {
                 params.put("resourceType", resourceType.toString());
+            }
+            if (StringUtils.isNotBlank(oldDocId)) {
+                params.put("documentId", oldDocId);
             }
 
             log.info("documentUpload url = {}, ragType = {}, resourceType = {}", url, ragType, resourceType);
