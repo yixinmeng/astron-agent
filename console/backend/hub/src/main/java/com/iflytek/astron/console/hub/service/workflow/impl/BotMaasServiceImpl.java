@@ -132,6 +132,12 @@ public class BotMaasServiceImpl implements BotMaasService {
 
         ExportedWorkflowTemplate template = loadAvailableTemplate(uid, templateId);
         if (template == null || StringUtils.isBlank(template.getSnapshotYaml())) {
+            log.warn("Create workflow from exported template failed, templateId={}, uid={}, spaceId={}, templateFound={}, snapshotBlank={}",
+                    templateId,
+                    uid,
+                    SpaceInfoUtil.getSpaceId(),
+                    template != null,
+                    template == null || StringUtils.isBlank(template.getSnapshotYaml()));
             throw new BusinessException(ResponseEnum.BOT_NOT_EXIST);
         }
 
@@ -157,13 +163,11 @@ public class BotMaasServiceImpl implements BotMaasService {
     private ExportedWorkflowTemplate loadAvailableTemplate(String uid, Long templateId) {
         ExportedWorkflowTemplate template = exportedWorkflowTemplateMapper.selectById(templateId);
         if (template == null || !Objects.equals(template.getIsDelete(), (byte) 0)) {
-            return null;
-        }
-
-        Long currentSpaceId = SpaceInfoUtil.getSpaceId();
-        boolean currentSpaceMatched = Objects.equals(template.getSpaceId(), currentSpaceId);
-        boolean currentUserMatched = Objects.equals(template.getCreatorUid(), uid);
-        if (!currentSpaceMatched && !currentUserMatched) {
+            log.warn("Exported workflow template unavailable, templateId={}, uid={}, templateFound={}, isDelete={}",
+                    templateId,
+                    uid,
+                    template != null,
+                    template == null ? null : template.getIsDelete());
             return null;
         }
 
@@ -183,6 +187,9 @@ public class BotMaasServiceImpl implements BotMaasService {
         try {
             template.setSnapshotYaml(exportWorkflowSnapshot(sourceWorkflow));
             exportedWorkflowTemplateMapper.updateById(template);
+            log.info("Repaired exported workflow template snapshot, templateId={}, sourceWorkflowId={}",
+                    templateId,
+                    template.getSourceWorkflowId());
         } catch (Exception e) {
             log.warn("Repair exported workflow template snapshot failed, templateId={}", templateId, e);
         }
@@ -286,14 +293,15 @@ public class BotMaasServiceImpl implements BotMaasService {
             throw new BusinessException(ResponseEnum.PARAMETER_ERROR);
         }
 
-        ExportedWorkflowTemplate template = exportedWorkflowTemplateMapper.selectOne(
-                withSpaceScope(new LambdaQueryWrapper<ExportedWorkflowTemplate>())
-                        .eq(ExportedWorkflowTemplate::getId, templateId)
-                        .eq(ExportedWorkflowTemplate::getIsDelete, 0));
+        ExportedWorkflowTemplate template = loadAvailableTemplate(uid, templateId);
         if (template == null) {
+            log.warn("Delete exported workflow template failed, templateId={}, uid={}, spaceId={}",
+                    templateId,
+                    uid,
+                    SpaceInfoUtil.getSpaceId());
             throw new BusinessException(ResponseEnum.BOT_NOT_EXIST);
         }
-        if (!Objects.equals(template.getCreatorUid(), uid)) {
+        if (StringUtils.isNotBlank(template.getCreatorUid()) && !Objects.equals(template.getCreatorUid(), uid)) {
             throw new BusinessException(ResponseEnum.PARAMETER_ERROR);
         }
 
