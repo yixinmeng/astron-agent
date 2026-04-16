@@ -23,6 +23,8 @@ public class MaasTemplate {
     private Integer botId;
     private String coverUrl;
     private Long groupId;
+    private String groupName;
+    private String groupNameEn;
     private Integer orderIndex;
     private Long templateId;
     private String templateSource;

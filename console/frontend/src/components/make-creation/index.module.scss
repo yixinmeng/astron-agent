@@ -335,12 +335,50 @@
           .agent_img {
             width: 100%;
             height: 136px;
+            overflow: hidden;
+
+            img {
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+              display: block;
+            }
           }
           .agent_bottom {
             width: 100%;
             height: 98px;
             padding: 16px;
             box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+          }
+
+          .templateTag {
+            display: inline-flex;
+            align-items: center;
+            width: fit-content;
+            max-width: 100%;
+            height: 24px;
+            padding: 0 10px;
+            margin-bottom: 8px;
+            border-radius: 999px;
+            background: #eef0ff;
+            color: #6356ea;
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 24px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+
+          .templateDesc {
+            width: 100%;
+            font-size: 14px;
+            font-weight: 400;
+            color: #7f7f7f;
+            line-height: 20px;
           }
 
           .my_btn {
@@ -348,7 +386,7 @@
             width: 100%;
             height: 36px;
             background: #6356ea;
-            margin-top: 4px;
+            margin-top: auto;
             border-radius: 10px;
             border: none;
             color: #ffffff;
@@ -369,7 +407,7 @@
               .iconBox {
                 transition: all 0.5s ease;
                 background-color: #ffffff !important;
-                span {
+                :global(.anticon) {
                   transition: all 0.5s ease;
                   color: rgb(63, 109, 255) !important;
                 }
@@ -382,28 +420,40 @@
           }
           .wrapper_agentType_Type {
             transition: all 0.5s ease;
-            //background: rgb(239, 240, 242);
             background-color: #fff;
             width: 261px;
             height: 234px;
-            //border: 1.5px solid #eaeaea;
-            background-image: url('~assets/imgs/bot-center/top-img1.png');
-            background-repeat: no-repeat;
-            background-position: top;
             border-radius: 16px;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             margin-bottom: 1px;
-            // padding: 8px 17px 8px 17px;
             cursor: pointer;
             border: 1px solid #e4eaff;
+            overflow: hidden;
             &:hover {
               background-color: #fff;
-              box-shadow: 5px 5px 10px 30px rgba(0, 0, 0, 0.05);
-              //background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, #FFFFFF 50%);
+              box-shadow: 0 14px 30px rgba(56, 71, 109, 0.12);
             }
+            .iconBox {
+              width: 48px;
+              height: 48px;
+              margin-bottom: 21px;
+              border-radius: 50%;
+              background: #6356ea;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+            }
+
+            .iconTitle {
+              font-size: 16px;
+              font-weight: 400;
+              line-height: 24px;
+              color: #000000;
+            }
+
             .agent_center_title {
               display: flex;
               justify-content: space-between;
@@ -424,6 +474,12 @@
                   margin-right: 5px;
                 }
               }
+            }
+
+            &.templateCard {
+              justify-content: flex-start;
+              align-items: stretch;
+              background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
             }
 
             .wrapper_agentType_container {

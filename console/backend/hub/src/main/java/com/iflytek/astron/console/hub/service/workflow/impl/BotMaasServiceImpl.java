@@ -6,11 +6,13 @@ import com.iflytek.astron.console.commons.constant.ResponseEnum;
 import com.iflytek.astron.console.commons.dto.bot.BotInfoDto;
 import com.iflytek.astron.console.commons.dto.workflow.CloneSynchronize;
 import com.iflytek.astron.console.commons.entity.bot.ChatBotBase;
+import com.iflytek.astron.console.commons.entity.bot.BotTypeList;
 import com.iflytek.astron.console.commons.entity.bot.UserLangChainInfo;
 import com.iflytek.astron.console.commons.entity.workflow.Workflow;
 import com.iflytek.astron.console.commons.exception.BusinessException;
 import com.iflytek.astron.console.commons.response.ApiResult;
 import com.iflytek.astron.console.commons.service.bot.BotService;
+import com.iflytek.astron.console.commons.service.bot.BotTypeListService;
 import com.iflytek.astron.console.commons.service.data.UserLangChainDataService;
 import com.iflytek.astron.console.commons.util.MaasUtil;
 import com.iflytek.astron.console.commons.util.space.SpaceInfoUtil;
@@ -40,9 +42,12 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * @Author cherry
@@ -67,6 +72,9 @@ public class BotMaasServiceImpl implements BotMaasService {
     private BotService botService;
 
     @Autowired
+    private BotTypeListService botTypeListService;
+
+    @Autowired
     private ExportedWorkflowTemplateMapper exportedWorkflowTemplateMapper;
 
     @Autowired
@@ -83,7 +91,8 @@ public class BotMaasServiceImpl implements BotMaasService {
 
     @Override
     public BotInfoDto createFromTemplate(String uid, MaasDuplicate maasDuplicate, HttpServletRequest request) {
-        if (MaasTemplate.TEMPLATE_SOURCE_EXPORTED.equalsIgnoreCase(maasDuplicate.getTemplateSource())) {
+        if (maasDuplicate.getTemplateId() != null
+                || MaasTemplate.TEMPLATE_SOURCE_EXPORTED.equalsIgnoreCase(maasDuplicate.getTemplateSource())) {
             return createFromExportedTemplate(maasDuplicate, request);
         }
         return createFromOfficialTemplate(uid, maasDuplicate, request);
@@ -197,9 +206,11 @@ public class BotMaasServiceImpl implements BotMaasService {
         }
 
         String uid = com.iflytek.astron.console.commons.util.RequestContextUtil.getUID();
+        Map<Integer, BotTypeList> botTypeMap = botTypeListService.getBotTypeList().stream()
+                .collect(Collectors.toMap(BotTypeList::getTypeKey, Function.identity(), (left, right) -> left));
         List<MaasTemplate> exportedTemplates = exportedWorkflowTemplateMapper.selectList(exportedQueryWrapper).stream()
                 .sorted(Comparator.comparing(ExportedWorkflowTemplate::getCreateTime, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(template -> convertExportedTemplate(template, uid))
+                .map(template -> convertExportedTemplate(template, uid, botTypeMap))
                 .toList();
 
         int safePageIndex = Math.max(pageIndex, 1);
@@ -232,7 +243,9 @@ public class BotMaasServiceImpl implements BotMaasService {
         template.setIsDelete((byte) 0);
         exportedWorkflowTemplateMapper.insert(template);
 
-        return convertExportedTemplate(exportedWorkflowTemplateMapper.selectById(template.getId()), uid);
+        Map<Integer, BotTypeList> botTypeMap = botTypeListService.getBotTypeList().stream()
+                .collect(Collectors.toMap(BotTypeList::getTypeKey, Function.identity(), (left, right) -> left));
+        return convertExportedTemplate(exportedWorkflowTemplateMapper.selectById(template.getId()), uid, botTypeMap);
     }
 
     @Override
@@ -256,7 +269,8 @@ public class BotMaasServiceImpl implements BotMaasService {
         exportedWorkflowTemplateMapper.updateById(template);
     }
 
-    private MaasTemplate convertExportedTemplate(ExportedWorkflowTemplate template, String uid) {
+    private MaasTemplate convertExportedTemplate(ExportedWorkflowTemplate template, String uid,
+            Map<Integer, BotTypeList> botTypeMap) {
         MaasTemplate result = new MaasTemplate();
         result.setId(template.getId());
         result.setTemplateId(template.getId());
@@ -264,6 +278,13 @@ public class BotMaasServiceImpl implements BotMaasService {
         result.setSubtitle(template.getSubtitle());
         result.setCoverUrl(template.getCoverUrl());
         result.setGroupId(template.getGroupId());
+        if (template.getGroupId() != null) {
+            BotTypeList botType = botTypeMap.get(template.getGroupId().intValue());
+            if (botType != null) {
+                result.setGroupName(botType.getTypeName());
+                result.setGroupNameEn(botType.getTypeNameEn());
+            }
+        }
         result.setTemplateSource(MaasTemplate.TEMPLATE_SOURCE_EXPORTED);
         result.setDeletable(Objects.equals(template.getCreatorUid(), uid));
         result.setCreateTime(template.getCreateTime());
