@@ -21,7 +21,6 @@ import com.iflytek.astron.console.hub.entity.maas.WorkflowTemplateExportRequest;
 import com.iflytek.astron.console.hub.entity.maas.WorkflowTemplateQueryDto;
 import com.iflytek.astron.console.commons.enums.bot.BotVersionEnum;
 import com.iflytek.astron.console.hub.mapper.ExportedWorkflowTemplateMapper;
-import com.iflytek.astron.console.hub.mapper.MaasTemplateMapper;
 import com.iflytek.astron.console.hub.service.bot.BotAIService;
 import com.iflytek.astron.console.hub.service.workflow.BotMaasService;
 import com.iflytek.astron.console.toolkit.service.workflow.WorkflowExportService;
@@ -39,7 +38,6 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -54,6 +52,7 @@ import java.util.concurrent.TimeUnit;
 public class BotMaasServiceImpl implements BotMaasService {
     private static final String AI_AVATAR_FALLBACK = "Should return fallback content";
     private static final int TEMPLATE_COVER_TIMEOUT_SECONDS = 20;
+    private static final int TEMPLATE_LIST_MAX_PAGE_SIZE = 200;
 
     @Autowired
     private MaasUtil maasUtil;
@@ -66,9 +65,6 @@ public class BotMaasServiceImpl implements BotMaasService {
 
     @Autowired
     private BotService botService;
-
-    @Autowired
-    private MaasTemplateMapper maasTemplateMapper;
 
     @Autowired
     private ExportedWorkflowTemplateMapper exportedWorkflowTemplateMapper;
@@ -191,17 +187,7 @@ public class BotMaasServiceImpl implements BotMaasService {
     public List<MaasTemplate> templateList(WorkflowTemplateQueryDto queryDto) {
         int pageIndex = queryDto.getPageIndex();
         int pageSize = queryDto.getPageSize();
-        pageSize = Math.min(pageSize, 50);
-        LambdaQueryWrapper<MaasTemplate> officialQueryWrapper = new LambdaQueryWrapper<>();
-        officialQueryWrapper.eq(MaasTemplate::getIsAct, 1);
-        if (queryDto.getGroupId() != null) {
-            officialQueryWrapper.eq(MaasTemplate::getGroupId, queryDto.getGroupId());
-        }
-        officialQueryWrapper.orderByDesc(MaasTemplate::getOrderIndex);
-
-        List<MaasTemplate> mergedTemplates = new ArrayList<>(maasTemplateMapper.selectList(officialQueryWrapper));
-        mergedTemplates.forEach(this::markOfficialTemplate);
-
+        pageSize = Math.min(Math.max(pageSize, 1), TEMPLATE_LIST_MAX_PAGE_SIZE);
         LambdaQueryWrapper<ExportedWorkflowTemplate> exportedQueryWrapper = new LambdaQueryWrapper<>();
         exportedQueryWrapper.eq(ExportedWorkflowTemplate::getIsDelete, 0)
                 .orderByDesc(ExportedWorkflowTemplate::getCreateTime);
@@ -215,12 +201,11 @@ public class BotMaasServiceImpl implements BotMaasService {
                 .sorted(Comparator.comparing(ExportedWorkflowTemplate::getCreateTime, Comparator.nullsLast(Comparator.reverseOrder())))
                 .map(template -> convertExportedTemplate(template, uid))
                 .toList();
-        mergedTemplates.addAll(exportedTemplates);
 
         int safePageIndex = Math.max(pageIndex, 1);
-        int fromIndex = Math.min((safePageIndex - 1) * pageSize, mergedTemplates.size());
-        int toIndex = Math.min(fromIndex + pageSize, mergedTemplates.size());
-        return mergedTemplates.subList(fromIndex, toIndex);
+        int fromIndex = Math.min((safePageIndex - 1) * pageSize, exportedTemplates.size());
+        int toIndex = Math.min(fromIndex + pageSize, exportedTemplates.size());
+        return exportedTemplates.subList(fromIndex, toIndex);
     }
 
     @Override
@@ -269,12 +254,6 @@ public class BotMaasServiceImpl implements BotMaasService {
 
         template.setIsDelete((byte) 1);
         exportedWorkflowTemplateMapper.updateById(template);
-    }
-
-    private void markOfficialTemplate(MaasTemplate template) {
-        template.setTemplateId(template.getId());
-        template.setTemplateSource(MaasTemplate.TEMPLATE_SOURCE_OFFICIAL);
-        template.setDeletable(Boolean.FALSE);
     }
 
     private MaasTemplate convertExportedTemplate(ExportedWorkflowTemplate template, String uid) {
