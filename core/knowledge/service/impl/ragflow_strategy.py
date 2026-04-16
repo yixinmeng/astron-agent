@@ -199,6 +199,7 @@ class RagflowRAGStrategy(RAGStrategy):
         separator: Optional[List[str]] = None,
         titleSplit: bool = False,
         cutOff: Optional[List[str]] = None,
+        document_id: Optional[str] = None,
         **kwargs: Any,
     ) -> List[Dict[str, Any]]:
         """
@@ -263,14 +264,19 @@ class RagflowRAGStrategy(RAGStrategy):
             dataset_id = await RagflowUtils.ensure_dataset(group)
             logger.info("Using dataset: %s, name: %s", dataset_id, group)
 
-            # Step 2-3: Process document upload
-            doc_id = await self._process_document_upload(file_input, dataset_id)
-
-            # Step 4-5: Handle document parsing
-            await self._handle_document_parsing(dataset_id, doc_id)
-
-            # Step 6: Get chunk content
-            chunks_data = await RagflowUtils.get_document_chunks(dataset_id, doc_id)
+            if document_id:
+                logger.info("re-slice upsert old_doc_id=%s", document_id)
+                doc_id, chunks_data = await self._upsert_document(
+                    file_input, dataset_id, document_id
+                )
+            else:
+                doc_id = await self._process_document_upload(
+                    file_input, dataset_id
+                )
+                await self._handle_document_parsing(dataset_id, doc_id)
+                chunks_data = await RagflowUtils.get_document_chunks(
+                    dataset_id, doc_id
+                )
 
             # Step 7: Convert to standard format
             result = RagflowUtils.convert_to_standard_format(doc_id, chunks_data)
@@ -1013,3 +1019,81 @@ class RagflowRAGStrategy(RAGStrategy):
         except Exception as e:
             logger.error(f"Failed to query document information: {e}")
             return None
+
+    async def _upsert_document(
+        self,
+        file_input: Any,
+        dataset_id: str,
+        old_doc_id: str,
+    ) -> tuple[str, List[Dict[str, Any]]]:
+        """Atomic upsert: upload + parse + fetch chunks + delete old.
+
+        Any failure at any step rolls back the pending new doc and preserves
+        old_doc_id. Chunks fetch is intentionally inside the transaction:
+        RagflowUtils.get_document_chunks silently returns [] on fetch
+        failure, so deleting the old doc before verifying non-empty chunks
+        would strand the file as un-retrievable.
+
+        Returns (new_doc_id, chunks_data) with chunks_data non-empty.
+        """
+        pending_doc_id = await self._process_document_upload(file_input, dataset_id)
+        logger.info(
+            "upsert pending_doc_id=%s, old_doc_id=%s", pending_doc_id, old_doc_id
+        )
+
+        try:
+            await self._handle_document_parsing(dataset_id, pending_doc_id)
+        except Exception:
+            logger.exception("upsert parse failed, rolling back %s", pending_doc_id)
+            await self._safe_delete_document(dataset_id, pending_doc_id, log_only=True)
+            raise
+
+        try:
+            chunks_data = await RagflowUtils.get_document_chunks(
+                dataset_id, pending_doc_id
+            )
+        except Exception:
+            logger.exception("upsert fetch failed, rolling back %s", pending_doc_id)
+            await self._safe_delete_document(dataset_id, pending_doc_id, log_only=True)
+            raise
+
+        if not chunks_data:
+            logger.error(
+                "upsert new doc %s returned zero chunks, rolling back",
+                pending_doc_id,
+            )
+            await self._safe_delete_document(dataset_id, pending_doc_id, log_only=True)
+            raise CustomException(
+                CodeEnum.ChunkQueryFailed,
+                f"Upsert produced zero chunks for pending doc {pending_doc_id}",
+            )
+
+        await self._safe_delete_document(dataset_id, old_doc_id, log_only=True)
+        return pending_doc_id, chunks_data
+
+    async def _safe_delete_document(
+        self,
+        dataset_id: str,
+        doc_id: str,
+        log_only: bool = False,
+    ) -> None:
+        """Delete a RAGFlow document. With log_only=True, swallow errors so
+        a delete failure doesn't mask a more important exception."""
+        try:
+            resp = await ragflow_client.delete_documents(dataset_id, [doc_id])
+            if resp.get("code") == 0:
+                logger.info("deleted RAGFlow doc: %s", doc_id)
+                return
+            msg = resp.get("message", "unknown")
+            logger.warning("delete doc %s non-zero: %s", doc_id, msg)
+            if not log_only:
+                raise CustomException(
+                    CodeEnum.ChunkDeleteFailed,
+                    f"Failed to delete document {doc_id}: {msg}",
+                )
+        except CustomException:
+            raise
+        except Exception as e:
+            logger.warning("delete doc %s raised: %s", doc_id, e)
+            if not log_only:
+                raise
