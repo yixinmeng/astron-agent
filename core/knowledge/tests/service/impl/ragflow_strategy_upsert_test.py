@@ -13,6 +13,7 @@ import inspect
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
 from knowledge.consts.error_code import CodeEnum
 from knowledge.exceptions.exception import CustomException
 from knowledge.service.impl.ragflow_strategy import RagflowRAGStrategy
@@ -477,9 +478,7 @@ async def test_split_preserves_custom_exception_from_upsert(monkeypatch):
         strategy,
         "_upsert_document",
         new=AsyncMock(
-            side_effect=CustomException(
-                CodeEnum.ChunkDeleteFailed, "delete old failed"
-            )
+            side_effect=CustomException(CodeEnum.ChunkDeleteFailed, "delete old failed")
         ),
     ):
         with pytest.raises(CustomException) as exc_info:
@@ -504,6 +503,7 @@ def _build_test_app_for_upload(monkeypatch):
     OTLP service manager which is not initialized in test environments.
     """
     from fastapi import FastAPI
+
     from knowledge.api.v1 import api as api_module
 
     # Stub get_span_and_metric so the handler can call span/metric methods
@@ -582,12 +582,12 @@ def test_file_upload_endpoint_no_document_id_passes_none_to_strategy(
 
     resp = client.post("/knowledge/v1/document/upload", files=files, data=data)
 
-    assert resp.status_code == 200, (
-        f"Expected 200, got {resp.status_code}, body={resp.text}"
-    )
-    assert "document_id" in captured, (
-        "Expected split() to receive document_id kwarg (value may be None)"
-    )
+    assert (
+        resp.status_code == 200
+    ), f"Expected 200, got {resp.status_code}, body={resp.text}"
+    assert (
+        "document_id" in captured
+    ), "Expected split() to receive document_id kwarg (value may be None)"
     assert captured["document_id"] is None
 
 
@@ -621,12 +621,12 @@ def test_file_upload_endpoint_with_document_id_passes_value_to_strategy(
 
     resp = client.post("/knowledge/v1/document/upload", files=files, data=data)
 
-    assert resp.status_code == 200, (
-        f"Expected 200, got {resp.status_code}, body={resp.text}"
-    )
-    assert captured.get("document_id") == "doc-old", (
-        f"Expected document_id='doc-old', got {captured.get('document_id')!r}"
-    )
+    assert (
+        resp.status_code == 200
+    ), f"Expected 200, got {resp.status_code}, body={resp.text}"
+    assert (
+        captured.get("document_id") == "doc-old"
+    ), f"Expected document_id='doc-old', got {captured.get('document_id')!r}"
 
 
 # ----------------------------------------------------------------------
@@ -641,9 +641,7 @@ def test_file_upload_endpoint_with_document_id_passes_value_to_strategy(
 def _split_signature_accepts_var_keyword(strategy_cls):
     """Return True iff strategy_cls.split() has a **kwargs (VAR_KEYWORD) param."""
     sig = inspect.signature(strategy_cls.split)
-    return any(
-        p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
-    )
+    return any(p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
 
 
 def test_aiui_strategy_split_accepts_var_keyword_for_forward_compat():
