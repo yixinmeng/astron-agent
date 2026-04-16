@@ -1867,8 +1867,8 @@ class KnowledgeServiceTest {
         }
 
         /**
-         * Ragflow-RAG first-time slice: lastUuid=null, oldDocId stays null,
-         * Python uses the legacy create-only path.
+         * Ragflow-RAG first-time slice: lastUuid=null, oldDocId stays null, Python uses the legacy
+         * create-only path.
          */
         @Test
         @DisplayName("Extract knowledge with Ragflow-RAG source, first slice (lastUuid=null)")
@@ -1906,8 +1906,8 @@ class KnowledgeServiceTest {
         }
 
         /**
-         * Ragflow-RAG re-slice: existing lastUuid is forwarded as oldDocId to
-         * trigger the Python upsert path.
+         * Ragflow-RAG re-slice: existing lastUuid is forwarded as oldDocId to trigger the Python upsert
+         * path.
          */
         @Test
         @DisplayName("Extract knowledge with Ragflow-RAG source, re-slice forwards lastUuid")

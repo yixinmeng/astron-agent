@@ -9,6 +9,7 @@ Covers:
 - Cross-strategy `**kwargs` compatibility (later task)
 """
 
+import inspect
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -119,7 +120,7 @@ async def test_upsert_document_happy_path_deletes_old_returns_new(monkeypatch):
     mock_upload.assert_awaited_once_with(file_input, "ds-1")
     mock_parse.assert_awaited_once_with("ds-1", new_doc_id)
     # Only the OLD doc is deleted on success; pending is kept (it's now live)
-    mock_delete.assert_awaited_once_with("ds-1", "old-doc-xyz", log_only=True)
+    mock_delete.assert_awaited_once_with("ds-1", "old-doc-xyz")
 
 
 @pytest.mark.asyncio
@@ -198,14 +199,15 @@ async def test_upsert_document_parse_fails_deletes_pending_not_old():
 
 
 @pytest.mark.asyncio
-async def test_upsert_document_delete_old_is_best_effort_returns_new_anyway(
+async def test_upsert_document_delete_old_failure_raises_and_preserves_db_state(
     monkeypatch,
 ):
-    """Upload OK + parse OK + fetch chunks OK + delete OLD is called with
-    log_only=True. _safe_delete_document swallows its internal failures via
-    log_only=True, so the caller ALWAYS sees the new (doc_id, chunks) tuple
-    even if old-doc cleanup fails underneath. We validate the contract by
-    checking the kwargs passed."""
+    """Commit-phase old-doc delete failure must fail the upsert.
+
+    Returning success here would advance Java's lastUuid to the new doc while
+    leaking the old doc as an orphan, which reintroduces the original bug under
+    delete-failure conditions.
+    """
     strategy = RagflowRAGStrategy()
     new_doc_id = "new-doc-ok"
     fake_chunks = [{"id": "c1", "content": "chunk content"}]
@@ -232,19 +234,22 @@ async def test_upsert_document_delete_old_is_best_effort_returns_new_anyway(
         patch.object(
             strategy,
             "_safe_delete_document",
-            new=AsyncMock(return_value=None),
+            new=AsyncMock(
+                side_effect=CustomException(
+                    CodeEnum.ChunkDeleteFailed, "delete old failed"
+                )
+            ),
         ) as mock_delete,
     ):
-        result = await strategy._upsert_document(
-            file_input=object(),
-            dataset_id="ds-1",
-            old_doc_id="old-doc-xyz",
-        )
+        with pytest.raises(CustomException) as exc_info:
+            await strategy._upsert_document(
+                file_input=object(),
+                dataset_id="ds-1",
+                old_doc_id="old-doc-xyz",
+            )
 
-    assert result == (new_doc_id, fake_chunks)
-    # Commit-phase old-doc delete uses log_only=True so any internal failure
-    # is swallowed by _safe_delete_document itself (tested in Section A).
-    mock_delete.assert_awaited_once_with("ds-1", "old-doc-xyz", log_only=True)
+    assert exc_info.value.code == CodeEnum.ChunkDeleteFailed.code
+    mock_delete.assert_awaited_once_with("ds-1", "old-doc-xyz")
 
 
 @pytest.mark.asyncio
@@ -457,6 +462,34 @@ async def test_split_document_id_set_uses_upsert_path(monkeypatch):
     mock_parse.assert_not_awaited()
 
 
+@pytest.mark.asyncio
+async def test_split_preserves_custom_exception_from_upsert(monkeypatch):
+    """split() must preserve domain errors so API returns the right code."""
+    strategy = RagflowRAGStrategy()
+
+    async def fake_ensure_dataset(group):
+        return "ds-1"
+
+    monkeypatch.setattr(
+        "knowledge.service.impl.ragflow_strategy.RagflowUtils.ensure_dataset",
+        fake_ensure_dataset,
+    )
+
+    with patch.object(
+        strategy,
+        "_upsert_document",
+        new=AsyncMock(
+            side_effect=CustomException(
+                CodeEnum.ChunkDeleteFailed, "delete old failed"
+            )
+        ),
+    ):
+        with pytest.raises(CustomException) as exc_info:
+            await strategy.split(file=object(), document_id="doc-old")
+
+    assert exc_info.value.code == CodeEnum.ChunkDeleteFailed.code
+
+
 # ----------------------------------------------------------------------
 # Section D: /knowledge/v1/document/upload — documentId form field passthrough
 # ----------------------------------------------------------------------
@@ -606,9 +639,6 @@ def test_file_upload_endpoint_with_document_id_passes_value_to_strategy(
 # Only RagflowRAGStrategy acts on it; the other strategies must silently
 # ignore it via **kwargs. If these tests fail, restore **kwargs — don't
 # delete the tests.
-
-
-import inspect
 
 
 def _split_signature_accepts_var_keyword(strategy_cls):

@@ -284,6 +284,8 @@ class RagflowRAGStrategy(RAGStrategy):
             logger.info("Split processing completed, returning %d chunks", len(result))
             return result
 
+        except CustomException:
+            raise
         except Exception as e:
             logger.error("Split operation failed: %s", e)
             raise ValueError(f"File chunking processing failed: {str(e)}") from e
@@ -1068,7 +1070,7 @@ class RagflowRAGStrategy(RAGStrategy):
                 f"Upsert produced zero chunks for pending doc {pending_doc_id}",
             )
 
-        await self._safe_delete_document(dataset_id, old_doc_id, log_only=True)
+        await self._safe_delete_document(dataset_id, old_doc_id)
         return pending_doc_id, chunks_data
 
     async def _safe_delete_document(
