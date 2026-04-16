@@ -1,6 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Modal, message, Spin, Dropdown, Tooltip } from 'antd';
+import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
+import { useSpaceType } from '@/hooks/use-space-type';
+import WorkflowImportModal from './components/WorkflowImportModal';
 import {
   submitBotBaseInfo,
   createFromTemplate,
@@ -8,10 +12,6 @@ import {
   getStarTemplate,
   getStarTemplateGroup,
 } from '@/services/spark-common';
-import { useTranslation } from 'react-i18next';
-import { useSpaceType } from '@/hooks/use-space-type';
-import WorkflowImportModal from './components/WorkflowImportModal';
-import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
 import ai_kefu from '@/assets/imgs/create-bot-v2/ai_kefu.png';
 import workflowImportIcon from '@/assets/imgs/workflow/workflow-import-icon.svg';
 
@@ -22,6 +22,8 @@ interface MakeCreateModalProps {
   onCancel: () => void;
 }
 
+const AI_RECORD_BOT_ID = 3063333;
+
 const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
   visible,
   onCancel,
@@ -29,16 +31,52 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
   const { t, i18n } = useTranslation();
   const isEnglish = i18n.language === 'en';
   const navigate = useNavigate();
-  const [starTemplatePageInfo, setStarTemplatePageInfo] = useState<{
-    pageIndex: number;
-    pageSize: number;
-  }>({ pageIndex: 1, pageSize: 20000 });
-  const [addAgentTemplateLoading, setAddAgentTemplateLoading] = useState(false);
-  const [createButton, setCreateButton] = useState(-1);
-  const mouseNowPageRef = useRef<Array<HTMLDivElement | null>>([]);
   const { isDefaultPersonalSpace } = useSpaceType(navigate);
 
-  const addAgentTemplate = async (flag: boolean, item?: any) => {
+  const [starTemplatePageInfo] = useState({
+    pageIndex: 1,
+    pageSize: 20000,
+  });
+  const [addAgentTemplateLoading, setAddAgentTemplateLoading] = useState(false);
+  const [workflowImportModalVisible, setWorkflowImportModalVisible] =
+    useState(false);
+  const [starModelList, setStarModelList] = useState<any[]>([]);
+  const [modalList, setModalList] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<number | null>(null);
+  const [hoveredIndex, setHoveredIndex] = useState(-1);
+  const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
+
+  const starModeShowList = useMemo(() => {
+    if (isDefaultPersonalSpace()) {
+      return starModelList;
+    }
+
+    return starModelList.filter(item => item.bot_id !== AI_RECORD_BOT_ID);
+  }, [isDefaultPersonalSpace, starModelList]);
+
+  const getStarTemplateList = async (groupId?: number | null) => {
+    const params: { pageIndex: number; pageSize: number; groupId?: number } = {
+      ...starTemplatePageInfo,
+    };
+    if (groupId !== undefined && groupId !== null) {
+      params.groupId = groupId;
+    }
+    const res = await getStarTemplate(params);
+    setStarModelList(Array.isArray(res) ? res : []);
+  };
+
+  const getTemplateTypeList = async () => {
+    const res = await getStarTemplateGroup();
+    const nextModalList = Array.isArray(res) ? [...res] : [];
+    nextModalList.unshift({
+      id: null,
+      groupName: t('createAgent1.allTemplates'),
+      groupNameEn: t('createAgent1.allTemplates'),
+    });
+    setModalList(nextModalList);
+  };
+
+  const addAgentTemplate = async (useTemplate: boolean, item?: any) => {
     setAddAgentTemplateLoading(true);
     const req: any = {
       name: t('createAgent1.commonCustom') + Date.now(),
@@ -49,91 +87,44 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
       botId: null,
       inputExample: ['', '', ''],
     };
-    if (flag) {
-      req['templateSource'] = item.templateSource;
-      if (item.templateSource === 'EXPORTED') {
-        req['templateId'] = item.templateId || item.id;
-      } else {
-        req['maasId'] = item.maasId;
+
+    try {
+      if (useTemplate && item) {
+        req.templateSource = item.templateSource;
+        req.templateId = item.templateId || item.id;
+        req.name = `${item.title}${Date.now()}`;
+        const res = (await createFromTemplate(req)) as {
+          flowId?: string | number;
+        };
+        navigate(`/work_flow/${res.flowId}/arrange`);
+        return;
       }
-      req['name'] = item.title + Date.now();
-      await createFromTemplate(req)
-        .then((res: any) => {
-          navigate(`/work_flow/${res.flowId}/arrange`);
-        })
-        .catch(e => {
-          message.error(e?.message || '创建失败');
-        });
-    } else {
-      await submitBotBaseInfo(req)
-        .then((res: any) => {
-          navigate(`/work_flow/${res.maasId}/arrange`);
-        })
-        .catch(e => {
-          message.error(e?.message || '创建失败');
-        });
+
+      const res = await submitBotBaseInfo(req);
+      navigate(`/work_flow/${res.maasId}/arrange`);
+    } catch (e: any) {
+      message.error(e?.message || '创建失败');
+    } finally {
+      setAddAgentTemplateLoading(false);
     }
-    setAddAgentTemplateLoading(false);
   };
 
   const deleteTemplateCard = async (templateId: number | string) => {
-    await deleteWorkflowTemplate(templateId)
-      .then(() => {
-        message.success(t('createAgent1.templateDeleteSuccess'));
-        getStarTemplateList(activeTab);
-      })
-      .catch((e: any) => {
-        message.error(e?.message || t('createAgent1.templateDeleteFailed'));
-      });
-  };
-
-  // ai 记账智能体 bodId,
-  const AI_RECORD_BOT_ID = 3063333;
-  const [starModelList, setStarModelList] = useState<any[]>([]);
-  const firstPageRef = useRef<Array<HTMLDivElement | null>>([]);
-  const [workflowImportModalVisible, setWorkflowImportModalVisible] =
-    useState(false);
-
-  // 根据id ai记账工具过滤， 只在默认的个人空间下展示
-  const starModeShowList = useMemo(() => {
-    if (isDefaultPersonalSpace()) {
-      return starModelList;
+    try {
+      await deleteWorkflowTemplate(templateId);
+      message.success(t('createAgent1.templateDeleteSuccess'));
+      await getStarTemplateList(activeTab);
+      await getTemplateTypeList();
+    } catch (e: any) {
+      message.error(e?.message || t('createAgent1.templateDeleteFailed'));
     }
-
-    return starModelList.filter(item => item.bot_id !== AI_RECORD_BOT_ID);
-  }, [isDefaultPersonalSpace, starModelList]);
-
-  // 获取星辰模板
-  const getStarTemplateList = async (id?: any) => {
-    const params: { pageIndex: number; pageSize: number; groupId?: number } = {
-      ...starTemplatePageInfo,
-    };
-    if (id !== undefined && id !== null) {
-      params.groupId = id;
-    }
-    const res = await getStarTemplate(params);
-    setStarModelList(res);
   };
-  //获取模板分类列表
-  const getTemplateTypeList = async () => {
-    const res = await getStarTemplateGroup();
-    res.unshift({
-      id: null,
-      groupName: t('createAgent1.allTemplates'),
-      groupNameEn: t('createAgent1.allTemplates'),
-    }); // 添加“所有模板”选项
-    setModalList(res);
-  };
-  // 根据分类进行查询
+
   const handleTabChange = (id: number | null) => {
-    if (id === activeTab) return; // 如果点击的tab已经是激活状态，则不进行操作
+    if (id === activeTab) return;
     setActiveTab(id);
     getStarTemplateList(id);
   };
-
-  const [activeTab, setActiveTab] = useState<any>(null);
-  const [modalList, setModalList] = useState<any[]>([]);
-  const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
 
   useEffect(() => {
     if (!visible) {
@@ -153,12 +144,13 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
       <Modal
         open={visible}
         getContainer={false}
-        width={'auto'}
+        width="auto"
         footer={false}
         centered
         onCancel={onCancel}
         afterClose={() => {
           setActiveTab(null);
+          setHoveredIndex(-1);
         }}
       >
         <Spin style={{ maxHeight: '654px' }} spinning={addAgentTemplateLoading}>
@@ -170,24 +162,24 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
                 </span>
               </div>
             </div>
-            {/* 工作流模板tabs */}
+
             <div className="w-full flex items-center justify-between mb-[14px]">
               <div className={styles.agent_Template_Tab}>
                 {modalList.slice(0, isEnglish ? 5 : 8).map(item => (
                   <div
-                    key={item.id}
-                    className={`${styles.agent_Template_Tab_item} cursor-pointer 
-                    ${activeTab == item.id ? styles.agent_Template_Tab_item_active : ''} 
-                    transition duration-75`}
+                    key={item.id ?? 'all'}
+                    className={`${styles.agent_Template_Tab_item} cursor-pointer ${
+                      activeTab == item.id
+                        ? styles.agent_Template_Tab_item_active
+                        : ''
+                    } transition duration-75`}
                     onClick={() => handleTabChange(item.id)}
                   >
                     <Tooltip
                       title={isEnglish ? item.groupNameEn : item.groupName}
                       placement="top"
                     >
-                      <div
-                        className={`${styles.agent_Template_Tab_item_content}`}
-                      >
+                      <div className={styles.agent_Template_Tab_item_content}>
                         {isEnglish ? item.groupNameEn : item.groupName}
                       </div>
                     </Tooltip>
@@ -200,43 +192,44 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
                         {modalList.slice(isEnglish ? 5 : 8).map(item => (
                           <div
                             key={item.id}
-                            className={`cursor-pointer font-medium text-[14px] leading-4 transition duration-75 font-[苹方-简] px-4 py-2 ${activeTab == item.id ? 'text-[#6356EA] bg-[#fff]' : ''}`}
-                            onClick={() => {
-                              handleTabChange(item.id);
-                            }}
+                            className={`cursor-pointer font-medium text-[14px] leading-4 transition duration-75 px-4 py-2 ${
+                              activeTab == item.id
+                                ? 'text-[#6356EA] bg-[#fff]'
+                                : ''
+                            }`}
+                            onClick={() => handleTabChange(item.id)}
                           >
-                            <Tooltip title={item.groupName} placement="top">
-                              {item.groupName}
+                            <Tooltip
+                              title={
+                                isEnglish ? item.groupNameEn : item.groupName
+                              }
+                              placement="top"
+                            >
+                              {isEnglish ? item.groupNameEn : item.groupName}
                             </Tooltip>
                           </div>
                         ))}
                       </div>
                     )}
                     trigger={['click']}
-                    onOpenChange={open => {
-                      // 控制高亮状态
-                      setMoreDropdownOpen(open);
-                    }}
+                    onOpenChange={setMoreDropdownOpen}
                   >
                     <div
-                      className={`
-                        ${styles.agent_Template_Tab_item}
-                        cursor-pointer
-                        transition duration-75
-                        ${
-                          // 只有在关闭且有选中才高亮，打开时不高亮
-                          !moreDropdownOpen &&
-                          modalList.slice(8).some(i => i.id === activeTab)
-                            ? styles.agent_Template_Tab_item_active
-                            : ''
-                        }
-                      `}
+                      className={`${styles.agent_Template_Tab_item} cursor-pointer transition duration-75 ${
+                        !moreDropdownOpen &&
+                        modalList
+                          .slice(isEnglish ? 5 : 8)
+                          .some(i => i.id === activeTab)
+                          ? styles.agent_Template_Tab_item_active
+                          : ''
+                      }`}
                     >
                       {t('createAgent1.moreCategories')}
                     </div>
                   </Dropdown>
                 )}
               </div>
+
               <div
                 className="flex items-center gap-2 w-fit cursor-pointer"
                 onClick={() => setWorkflowImportModalVisible(true)}
@@ -251,6 +244,7 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
                 </span>
               </div>
             </div>
+
             <div className={styles.scroll_bar}>
               <div className={styles.wrapper_container}>
                 <div className={styles.wrapper_container_agentType}>
@@ -259,19 +253,7 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
                       onClick={() => addAgentTemplate(false)}
                       className={`${styles.wrapper_agentType_Type} ${styles.wrapper_agentType_Type_only_hover}`}
                     >
-                      <div
-                        className={styles.iconBox}
-                        style={{
-                          width: '48px',
-                          height: '48px',
-                          backgroundColor: '#6356EA',
-                          borderRadius: '50%',
-                          display: 'flex',
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          marginBottom: '21px',
-                        }}
-                      >
+                      <div className={styles.iconBox}>
                         <PlusOutlined
                           style={{
                             fontSize: '20px',
@@ -279,20 +261,11 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
                           }}
                         />
                       </div>
-                      <div
-                        className={styles.iconTitle}
-                        style={{
-                          fontSize: '16px',
-                          fontWeight: 'normal',
-                          lineHeight: '24px',
-                          color: '#000000',
-                        }}
-                      >
+                      <div className={styles.iconTitle}>
                         {t('createAgent1.customCreation')}
                       </div>
                     </div>
 
-                    {/* --------------- 模板创建 -------------------- */}
                     {starModeShowList.map((item, index) => {
                       const cover =
                         item?.cover_url || item?.coverUrl || ai_kefu;
@@ -300,18 +273,17 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
                         item?.subtitle ||
                         item?.coreAbilities?.description ||
                         '';
-                      const templateKey = `${item.templateSource || 'OFFICIAL'}-${item.templateId || item.maasId || item.id || index}`;
+                      const categoryName = isEnglish
+                        ? item?.groupNameEn || item?.groupName
+                        : item?.groupName || item?.groupNameEn;
+                      const templateKey = `${item.templateSource || 'EXPORTED'}-${item.templateId || item.id || index}`;
+
                       return (
                         <div
                           key={templateKey}
                           className={styles.agentType_Type_content}
-                          ref={ref => (mouseNowPageRef.current[index] = ref)}
-                          onMouseLeave={() => {
-                            setCreateButton(-1);
-                          }}
-                          onMouseEnter={() => {
-                            setCreateButton(index);
-                          }}
+                          onMouseLeave={() => setHoveredIndex(-1)}
+                          onMouseEnter={() => setHoveredIndex(index)}
                         >
                           {item?.deletable && (
                             <button
@@ -325,18 +297,19 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
                               <CloseOutlined />
                             </button>
                           )}
+
                           <div
-                            ref={ref => (firstPageRef.current[index] = ref)}
-                            className={styles.wrapper_agentType_Type}
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                            }}
+                            className={`${styles.wrapper_agentType_Type} ${styles.templateCard}`}
                           >
                             <div className={styles.agent_img}>
                               <img src={cover} alt="" />
                             </div>
                             <div className={styles.agent_bottom}>
+                              {categoryName && (
+                                <div className={styles.templateTag}>
+                                  {categoryName}
+                                </div>
+                              )}
                               <div className={styles.agent_center_title}>
                                 <div className={styles.agent_center_title_left}>
                                   <p
@@ -347,25 +320,16 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
                                   </p>
                                 </div>
                               </div>
-                              {createButton == index && (
+                              {hoveredIndex === index ? (
                                 <button
                                   onClick={() => addAgentTemplate(true, item)}
                                   className={styles.my_btn}
                                 >
                                   <span>{t('createAgent1.buildSame')}</span>
                                 </button>
-                              )}
-                              {createButton !== index && (
+                              ) : (
                                 <div
-                                  className={styles.ell}
-                                  style={{
-                                    fontSize: '14px',
-                                    fontWeight: 'normal',
-                                    color: '#7f7f7f',
-                                    lineHeight: '18px',
-                                    paddingTop: '2px',
-                                    width: '100%',
-                                  }}
+                                  className={`${styles.ell} ${styles.templateDesc}`}
                                 >
                                   {description}
                                 </div>
