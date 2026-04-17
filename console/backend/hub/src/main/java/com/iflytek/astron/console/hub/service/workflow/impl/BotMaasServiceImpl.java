@@ -245,9 +245,11 @@ public class BotMaasServiceImpl implements BotMaasService {
         }
 
         String uid = com.iflytek.astron.console.commons.util.RequestContextUtil.getUID();
-        Map<Integer, BotTypeList> botTypeMap = botTypeListService.getBotTypeList().stream()
+        Map<Integer, BotTypeList> botTypeMap = botTypeListService.getBotTypeList()
+                .stream()
                 .collect(Collectors.toMap(BotTypeList::getTypeKey, Function.identity(), (left, right) -> left));
-        List<MaasTemplate> exportedTemplates = exportedWorkflowTemplateMapper.selectList(exportedQueryWrapper).stream()
+        List<MaasTemplate> exportedTemplates = exportedWorkflowTemplateMapper.selectList(exportedQueryWrapper)
+                .stream()
                 .sorted(Comparator.comparing(ExportedWorkflowTemplate::getCreateTime, Comparator.nullsLast(Comparator.reverseOrder())))
                 .map(template -> convertExportedTemplate(template, uid, botTypeMap))
                 .toList();
@@ -282,7 +284,8 @@ public class BotMaasServiceImpl implements BotMaasService {
         template.setIsDelete((byte) 0);
         exportedWorkflowTemplateMapper.insert(template);
 
-        Map<Integer, BotTypeList> botTypeMap = botTypeListService.getBotTypeList().stream()
+        Map<Integer, BotTypeList> botTypeMap = botTypeListService.getBotTypeList()
+                .stream()
                 .collect(Collectors.toMap(BotTypeList::getTypeKey, Function.identity(), (left, right) -> left));
         return convertExportedTemplate(exportedWorkflowTemplateMapper.selectById(template.getId()), uid, botTypeMap);
     }
