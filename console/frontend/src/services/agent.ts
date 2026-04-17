@@ -14,6 +14,7 @@ export interface GetAgentListParams {
 
 export interface BotData {
   botId: number;
+  maasId: number;
   uid: string;
   marketBotId: number;
   botName: string;
