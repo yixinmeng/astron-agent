@@ -1,9 +1,16 @@
 # RAGFlow 集成问题清单与审核请求
 
-> **状态**：待 Codex 独立审核
+> **状态**：Codex 独立审核 v1 已吸收（2026-04-17）
 > **作者**：yixinmeng
-> **最后更新**：2026-04-17
-> **目的**：在向 iflytek/astron-agent 上游提交修复 PR 之前，请 Codex 对本清单的准确性、完整性、优先级和修复可行性进行独立审核。
+> **最后更新**：2026-04-17（Codex v1 反馈修订版）
+> **目的**：向 iflytek/astron-agent 上游提交修复 PR 前的全景规划文档。
+>
+> **审核结论摘要（v1）**：
+> - 3 处表述硬伤已修正（RF-04 放大表述 / RF-08 幻觉字段 / RF-10 编数字）
+> - 严重度调整 4 项（RF-02 P0→P1、RF-05 P1→P2、RF-09 P1→P2、RF-16 P2→P1）
+> - 新增 4 项遗漏（RF-18 版本漂移 / RF-19 page_size 截断 / RF-20 测试覆盖 / RF-21 配置行为）
+> - 路线由 A/B/C 改为 **D 路线**（含 D1 版本基线前置）
+> - RF-01 实施方案由"纯 Python 沙箱"改为"跨层改动（Java 透传 repo_id + Python 消费）"
 
 ---
 
@@ -78,19 +85,28 @@
   - 多知识库隔离能力 **完全失效**，企业用户无法按部门/场景建多个 Repo
   - `ChunkQueryReq.match.repoId` 在 Ragflow-RAG 分支下形同虚设
   - RAGFlow 的 multi-dataset 能力被废掉
-- **改动面**：纯 RAGFlow 沙箱
-- **PR 友好度**：⭐⭐⭐
+- **改动面（Codex v1 修正）**：⚠️ **不是纯 Python 沙箱**。当前 `/document/upload` 和 `/document/split` 都未接收 `repo_id` 参数，Java 侧 `KnowledgeV2ServiceCallHandler` 也未透传。必须**跨层改动**：
+  - Java 侧：`FileInfoV2Service.java` / `KnowledgeV2ServiceCallHandler.java` 在切片/上传请求中透传 `coreRepoId`
+  - Python API 层：`api.py` 的 `/document/upload` / `/document/split` 接收 `repo_id` Optional 参数
+  - Python 策略层：`ragflow_strategy.py` 的 `split/query` 用 `repo_id` 路由到 per-repo dataset
+  - `ragflow_utils.py` 新增 `ensure_dataset_for_repo(repo_id)`
+  - 保留 `RAGFLOW_LEGACY_SINGLE_DATASET` 环境变量做灰度兼容
+- **PR 友好度**：⭐⭐（原估 ⭐⭐⭐，Codex v1 修正：跨层改动后降级）
 - **验证命令**：
   ```bash
   grep -n "RAGFLOW_DEFAULT_GROUP\|get_default_dataset_name\|ensure_dataset" \
     core/knowledge/service/impl/ragflow_strategy.py \
     core/knowledge/infra/ragflow/ragflow_utils.py
+  grep -n "repo_id\|coreRepoId" \
+    core/knowledge/api/v1/api.py \
+    console/backend/toolkit/src/main/java/com/iflytek/astron/console/toolkit/handler/KnowledgeV2ServiceCallHandler.java
   ```
 
 ---
 
 #### RF-02 删除 Repo 不级联清理 RAGFlow
 
+- **严重度（Codex v1 修正）**：P0 → **P1**（必须依赖 RF-01 前置，单独做意义有限）
 - **描述**：删除 astron-agent 的 Repo 时只做 MySQL 软删，RAGFlow 侧的 dataset 和 documents 不被清理。
 - **证据**：
   - `console/backend/toolkit/src/main/java/com/iflytek/astron/console/toolkit/service/repo/RepoService.java:903-935`
@@ -103,8 +119,11 @@
 - **影响**：
   - 长时间运行后 RAGFlow 侧堆积大量孤儿 dataset / document，占用存储
   - 同名 dataset 重建时可能与历史冲突
-- **改动面**：公共代码加 1 行 Spring 事件发布 + 新增 RAGFlow listener 类
-- **PR 友好度**：⭐⭐（推荐用 `@EventListener` 解耦，其他 strategy 无感）
+- **架构依赖（Codex v1 补充）**：⚠️ **强依赖 RF-01 前置落地**。当前所有 Repo 共用单一 dataset（`Stellar Knowledge Base`），直接调用 RAGFlow `delete_dataset` 会**误删其他 Repo 的数据**。因此：
+  - **RF-01 未落地时**：本项应降级为"仅删除该 Repo 关联的 documents"（调 `delete_documents` 而非 `delete_dataset`）
+  - **RF-01 落地后**：本项才能做完整的 `delete_dataset` 级联清理
+- **改动面**：公共代码加 1 行 Spring 事件发布 + 新增 RAGFlow listener 类（含"仅删 documents"和"删 dataset"两种模式切换）
+- **PR 友好度**：⭐（Codex v1 修正：因依赖 RF-01 前置，降级）
 - **验证命令**：
   ```bash
   grep -n "deleteRepo\|ragflow.*delete\|delete.*dataset" \
@@ -143,13 +162,14 @@
 
 #### RF-04 前端分块参数在 Ragflow-RAG 分支不完整透传
 
-- **描述**：前端设置的 lengthRange / separator / overlap / cutOff / titleSplit 等分块参数，在 RAGFlow 链路中未完整透传到 RAGFlow API。
+- **描述（Codex v1 修正）**：前端**已暴露**的分块参数（`lengthRange`、`separator`）在 RAGFlow 链路中未下沉到 RAGFlow 的 `parser_config`；其余字段（`overlap` / `cutOff` / `titleSplit`）属于"能力缺口"而非"链路丢失"——前端本身就没针对 RAGFlow 完整暴露。
 - **证据**：
   - `console/backend/toolkit/src/main/java/.../KnowledgeV2ServiceCallHandler.java:65-70`
-    > 仅透传 `lengthRange` 和 `separator`，缺失 `overlap` / `cutOff` / `titleSplit`
+    > 仅透传 `lengthRange` 和 `separator`
   - `core/knowledge/service/impl/ragflow_strategy.py:193-287` 的 `split` 方法
     > 接收了 `overlap`、`cutOff`、`titleSplit` 参数，但**未写入** `ragflow_client.upload_document_to_dataset` 调用的 `chunk_config` 或 `parser_config`
-- **行为**：前端改了分块配置，RAGFlow 侧仍走默认切分策略。
+  - 前端分块表单：`console/frontend/src/pages/resource-management/upload-page/components/data-clean.tsx` 未完整暴露 `overlap` / `titleSplit` / `cutOff` 三项
+- **行为**：前端改了 `lengthRange`/`separator`，RAGFlow 侧仍走默认切分策略；其余字段前端根本改不到。
 - **影响**：UI 设置面板形同虚设；"分块预览"和"重新切片"体感差。
 - **改动面**：公共 Java 侧加透传字段 + RAGFlow strategy 内接入 RAGFlow `parser_config`
 - **PR 友好度**：⭐⭐
@@ -164,6 +184,7 @@
 
 #### RF-05 `seperator`（错拼）与 `separator`（正确）字段全栈污染
 
+- **严重度（Codex v1 修正）**：P1 → **P2**（维护性/一致性问题，非集成阻塞）
 - **描述**：分隔符字段在前端、Java VO、DB 种子使用错拼 `seperator`；Java Service 转 core-knowledge 时改为正确 `separator`；core-knowledge Pydantic 使用正确 `separator`。
 - **证据**：
   - 前端 13 文件 47 处错拼：
@@ -238,12 +259,16 @@
 
 #### RF-08 RAGFlow 高级检索参数 API 无入口
 
-- **描述**：RAGFlow retrieval API 原生支持 rerank / keyword 混合检索 / GraphRAG / highlight / question_history 等参数，但 astron-agent 未暴露。
+- **描述（Codex v1 修正）**：RAGFlow retrieval API 支持若干高级参数（rerank / keyword 混合检索 / GraphRAG / highlight 等），但 astron-agent 未暴露。**具体可开放字段集以 RF-18 锁定的 SDK 版本为准**。
 - **证据**：
   - `core/knowledge/service/impl/ragflow_strategy.py:70-76` 构造 `ragflow_request`
-    > 仅包含 `question / dataset_ids / top_k / similarity_threshold / vector_similarity_weight`，**缺** `rerank_id`、`keyword`、`use_kg`、`highlight`、`question_history`、`document_ids_for_reranking` 等
+    > 仅包含 `question / dataset_ids / top_k / similarity_threshold / vector_similarity_weight`
   - `core/knowledge/domain/entity/chunk_dto.py:136-151` `ChunkQueryReq`
     > schema 无对应字段
+- **可开放字段（待 RF-18 核对）**：
+  - ✅ 仓库/SDK 内有证据：`rerank_id`、`keyword`、`highlight`、`similarity_threshold`（已用）、`vector_similarity_weight`（已用但硬编码，见 RF-09）
+  - ⚠️ **初稿中列的 `question_history` / `document_ids_for_reranking` 在仓库及 `ragflow-sdk==0.13.0` 中未找到直接证据**，Codex v1 指出为潜在幻觉，需待 RF-18 版本基线确认
+  - ❓ 待核对：`use_kg`（GraphRAG）在当前锁定的 SDK 版本是否可用
 - **行为**：即使后端 RAGFlow 实例开启了 rerank 模型或 GraphRAG，前端/API 也无法触发。
 - **影响**：RAGFlow 最大卖点（混合检索、GraphRAG、rerank）完全被抽象层屏蔽。
 - **改动面**：新增 `RagflowQueryExt` DTO，`ChunkQueryReq` 加 `Optional[RagflowQueryExt] ragflow_ext`
@@ -257,6 +282,7 @@
 
 #### RF-09 `vector_similarity_weight` 硬编码 0.2
 
+- **严重度（Codex v1 修正）**：P1 → **P2**（建议作为 RF-08 的子项同批修复）
 - **描述**：向量/关键词权重被写死，用户无法调节。
 - **证据**：
   - `core/knowledge/service/impl/ragflow_strategy.py:75`
@@ -274,7 +300,8 @@
 
 #### RF-10 创建 Repo 时无法选择 RAGFlow 的 chunk_method
 
-- **描述**：RAGFlow 提供 12 种切片策略（naive / book / table / paper / manual / qa / laws / presentation / picture / one / resume / knowledge_graph / email），astron-agent 仅用 `naive`。
+- **描述（Codex v1 修正）**：RAGFlow 提供多种 chunk_method（常见如 naive / book / table / paper / manual / qa 等；**具体集合以 RF-18 锁定的 SDK 版本为准**，原稿"12 种"数字未在仓库内实锤，已删除），astron-agent 仅使用 `naive`。
+- **改动面建议（Codex v1 优化）**：走 Repo 表的 `extra_config` JSON 字段存储 `chunk_method`，而非新增表列——前者 PR 友好度更高，不动 schema。
 - **证据**：
   - `core/knowledge/infra/ragflow/ragflow_utils.py`（创建 dataset 时）
     > 未接收 `chunk_method` 参数，默认即 naive
@@ -395,6 +422,7 @@
 
 #### RF-16 RAGFlow 异常吞成空结果
 
+- **严重度（Codex v1 修正）**：P2 → **P1**（不只是观测问题，会把 RAGFlow 真实故障伪装成"0 结果"返回给用户，监控指标失真，线上排障成本高）
 - **描述**：RAGFlow 调用异常时静默返回空列表或空字典，上游无法区分"真的没命中"和"RAGFlow 挂了"。
 - **证据**：
   - `core/knowledge/service/impl/ragflow_strategy.py:102-104`
@@ -431,25 +459,152 @@
 
 ---
 
-## 3. 修复路线建议（3 个候选）
+### 2.7 Codex 审核新增项（v1 遗漏修正）
 
-### 路线 A：政治友好（建立信任）
+Codex v1 审核发现以下 4 项在初稿中被完全遗漏，对 RF-01~RF-17 的落地有前置或兜底性影响。
 
-**顺序**：RF-06 → RF-11 → RF-17 → RF-16 → RF-01 → RF-14 → RF-15 → RF-08+RF-09
-**理由**：前 4 个全是 ⭐⭐⭐ 零侵入，快速建立讯飞对 PR 质量的信任。
-**估期**：2-3 周，每周 1-2 个 PR
+---
 
-### 路线 B：用户痛点（业务价值优先）
+#### RF-18 版本漂移风险（🔴 前置基线，必须最先解决）
 
-**顺序**：RF-01 → RF-04 → RF-08+RF-09+RF-10 → RF-06 → RF-02 → RF-03
-**理由**：RF-01 + RF-04 修完，企业用户立刻能用多知识库 + 分块调优。
-**估期**：4-6 周（含 RF-02/RF-03 的架构协商时间）
+- **严重度**：P0（阻塞所有能力开放类 PR）
+- **描述**：仓库锁定的 RAGFlow server 镜像和 SDK 版本与官方最新版差距显著，直接影响 RF-08 / RF-10 能开放的 API 边界。
+- **证据**：
+  - `docker/ragflow/.env:97`
+    > 默认镜像 `infiniflow/ragflow:v0.20.5-slim`
+  - `core/knowledge/pyproject.toml:37`
+    > 锁定 SDK `ragflow-sdk==0.13.0`
+  - 官方最新：RAGFlow Server **v0.23.1**（2025-12-31）、`ragflow-sdk` **0.24.0**（2026-02-11）
+- **行为**：仓库基线与官方主线存在较大版本代差；v0.20.5 → v0.23.1 之间的 breaking change 和新增能力都不可知。
+- **影响**：
+  - RF-08（暴露高级检索参数）的字段集完全由 SDK 版本决定
+  - RF-10（chunk_method 集合）同理
+  - 任何能力开放类 PR 若不先锁版本，都可能上游合并后因版本差异而炸生产
+- **改动面**：
+  - 先决定是"保守对齐当前基线 v0.20.5"还是"升级基线到 v0.23.x"
+  - 若升级：需提交 `docker/ragflow/.env` + `pyproject.toml` + 各配置文件的同步 PR，并做兼容性回归
+- **PR 友好度**：⭐⭐（需与讯飞沟通基线策略）
+- **验证命令**：
+  ```bash
+  grep -n "ragflow:v\|ragflow-sdk" docker/ragflow/.env core/knowledge/pyproject.toml
+  ```
 
-### 路线 C：改动面最小（仅沙箱内）
+---
 
-**只做 ⭐⭐⭐ 的 9 项**：RF-01、RF-06、RF-08、RF-09、RF-11、RF-14、RF-15、RF-16、RF-17
-**理由**：全部局限在 `core/knowledge/service/impl/ragflow_strategy.py` 和 `core/knowledge/infra/ragflow/*` 沙箱内，讯飞几乎无理由拒绝。
-**估期**：2-3 周
+#### RF-19 `page_size=1000` 截断导致误判
+
+- **严重度**：P1
+- **描述**：多处文档存在性查询固定拉取前 1000 条，超出后直接误判"不存在"。
+- **证据**：
+  - `core/knowledge/service/impl/ragflow_strategy.py:330`
+    > `validate_document_exists` 中 `page_size=1000`
+  - `core/knowledge/infra/ragflow/ragflow_client.py:613`
+    > `get_document_info` 内部 `list_documents_in_dataset` 固定 `page_size=1000`
+- **行为**：大数据量 dataset（>1000 文档）时，真实存在的文档会被误判为"不存在"。
+- **影响**：
+  - RF-03 实现后（外部文档关联）场景会频发
+  - chunks_save 的 `_validate_document_exists` 会异常抛出
+- **改动面**：纯 RAGFlow；改为按 id 直接查询（`get_document_info(dataset_id, doc_id)`）或分页遍历
+- **PR 友好度**：⭐⭐⭐
+- **验证命令**：
+  ```bash
+  grep -n "page_size=1000\|page_size = 1000" core/knowledge/service/impl/ragflow_strategy.py core/knowledge/infra/ragflow/
+  ```
+
+---
+
+#### RF-20 RAGFlow 集成测试覆盖严重不足
+
+- **严重度**：P2（非功能缺陷，但阻塞所有高风险修复）
+- **描述**：`core/knowledge/tests/infra/ragflow/__init__.py` 基本为空；现有 `ragflow_strategy` 测试大量使用 mock，无真实 API 兼容性兜底。
+- **证据**：
+  - `core/knowledge/tests/infra/ragflow/__init__.py:1`（内容基本为空）
+  - `core/knowledge/tests/service/impl/ragflow_strategy_test.py` 和 `ragflow_strategy_upsert_test.py` 大量 mock `ragflow_client.*`
+- **行为**：RAGFlow 版本升级或 API 变更时，单元测试全部通过，但真实调用可能失败。
+- **影响**：
+  - RF-18 版本升级的回归风险高
+  - 任何涉及 RAGFlow API 调用的 PR 缺少可靠的兼容性验证
+- **改动面**：
+  - 增加 integration test：用 testcontainers 起真 RAGFlow 实例做 E2E 测试
+  - 或至少用 VCR 录制真实 HTTP 响应作为 fixture
+- **PR 友好度**：⭐⭐
+- **验证命令**：
+  ```bash
+  wc -l core/knowledge/tests/infra/ragflow/__init__.py
+  grep -rn "mock\|Mock\|patch" core/knowledge/tests/service/impl/ragflow_strategy_test.py | wc -l
+  ```
+
+---
+
+#### RF-21 `RAGFLOW_DEFAULT_GROUP` 配置行为不一致
+
+- **严重度**：P2
+- **描述**：同一个环境变量在不同代码路径的兜底行为不统一：部分路径 fallback 到 `"Stellar Knowledge Base"`，部分路径未配置时直接抛异常。
+- **证据**：
+  - `core/knowledge/service/impl/ragflow_strategy.py:240`
+    > `group = os.getenv("RAGFLOW_DEFAULT_GROUP", "Stellar Knowledge Base")` ← 有默认值
+  - `core/knowledge/service/impl/ragflow_strategy.py:310-315` `_validate_chunks_save_config`
+    > `default_group = os.getenv("RAGFLOW_DEFAULT_GROUP")` + `if not default_group: raise CustomException` ← 无默认值
+- **行为**：同一环境未配置 `RAGFLOW_DEFAULT_GROUP` 时，`split` 能跑但 `chunks_save` 会失败。
+- **影响**：部署时若漏配环境变量，仅 split 测试能过，chunk 保存时才炸，排障成本高。
+- **改动面**：纯 RAGFlow；统一到单一 config loader（`RagflowUtils.get_default_group()` 或类似）
+- **PR 友好度**：⭐⭐⭐
+- **验证命令**：
+  ```bash
+  grep -n "RAGFLOW_DEFAULT_GROUP" core/knowledge/service/impl/ragflow_strategy.py core/knowledge/infra/ragflow/ragflow_utils.py
+  ```
+
+---
+
+## 3. 修复路线（D 路线，Codex v1 建议并已采纳）
+
+**废弃：A/B/C 路线**（初稿未考虑版本基线，为空中楼阁）
+
+### D 路线：五阶段
+
+```
+D1 (版本基线)       → RF-18（锁定 RAGFlow server + SDK 版本矩阵）
+     ↓
+D2 (架构前置)       → RF-01（跨层 repo_id 透传） → RF-07（JSON split documentId）
+     ↓
+D3 (用户可感知正确性) → RF-04 → RF-06 → RF-19 → RF-08 + RF-09 → RF-10
+     ↓
+D4 (可靠性与运维)    → RF-15 → RF-16 → RF-17 → RF-12 → RF-14 → RF-21 → RF-13
+     ↓
+D5 (跨层大功能)     → RF-03（独立大 PR） → RF-02（依赖 RF-01 落地后）
+     ↓
+(支线)              → RF-05（小 alias PR 或延后） | RF-11（SDK 重构，低优先级） | RF-20（测试兜底，贯穿各阶段）
+```
+
+### 阶段说明
+
+| 阶段 | 目标 | 包含项 | 估期 |
+|------|------|--------|------|
+| **D1** | 锁兼容基线 | RF-18 | 0.5-1 周（需外部决策） |
+| **D2** | 架构前置（打通 repo 语义） | RF-01 + RF-07 | 1-2 周 |
+| **D3** | 用户可感知正确性 | RF-04 + RF-06 + RF-19 + RF-08+09 + RF-10 | 2-3 周 |
+| **D4** | 可靠性与运维 | RF-15 → RF-16 → RF-17 → RF-12 → RF-14 → RF-21 → RF-13 | 2-3 周 |
+| **D5** | 跨层大功能 | RF-03（独立）+ RF-02（RF-01 后） | 2-4 周 |
+| 支线 | 维护性/重构 | RF-05 / RF-11 | 穿插 |
+| 贯穿 | 测试兜底 | RF-20 | 持续 |
+
+### 立即动手建议（Codex v1 采纳）
+
+**第一个 PR：先不是 RF-01，而是 D1（RF-18 版本基线核实）**
+
+原因：RF-08 / RF-10 的字段集、RF-11 的 SDK 重构、RF-20 的测试基线都依赖版本决策。不锁基线先推 RF-01，合并后可能因版本差异产生连锁 breaking change。
+
+**D1 具体动作**：
+1. 查 `docker/ragflow/.env` 确认当前默认镜像版本
+2. 跑 `python -c "import ragflow_sdk; print(ragflow_sdk.__version__)"` 确认 SDK 版本
+3. 核对 RAGFlow v0.20.5 → v0.23.1 的 changelog / breaking changes
+4. 决定：**保守对齐现基线** 还是 **提升级 PR**
+5. 把决策结论回写本文档作为 D1 结论
+
+**第二个 PR（D2 启动）：RF-01 跨层改造**
+
+- **不是**纯 Python 修复（Codex v1 指正）
+- 必须包含 Java 侧 `repo_id` 透传 + Python API 层接收 + strategy 层消费
 
 ---
 
@@ -533,3 +688,75 @@
 2. **误报清单**：本文档中哪些项其实不构成问题？
 3. **最优路线**：你推荐哪条路线，或提出新路线？
 4. **立即动手建议**：如果只改 1 个 PR，你建议改哪一项？
+
+---
+
+## 6. Codex v1 审核反馈摘要（2026-04-17 已吸收）
+
+### 6.1 事实准确性修正
+
+| 项目 | v1 反馈 | 处理 |
+|------|---------|------|
+| RF-04 | 表述放大（"overlap/titleSplit/cutOff 丢失"不准确，前端本就没完整暴露） | ✅ 描述已收缩为"lengthRange/separator 未下沉，其他是能力缺口非链路丢失" |
+| RF-08 | 幻觉字段（`question_history`、`document_ids_for_reranking` 在仓库及 `ragflow-sdk==0.13.0` 中无直接证据） | ✅ 已删除幻觉字段，剩余字段标注"待 RF-18 版本基线核对" |
+| RF-10 | "12 种 chunk_method"数字未在仓库实锤 | ✅ 已改为"多种（具体集合以 RF-18 为准）" |
+
+### 6.2 严重度调整
+
+| 项目 | 原 | 新 | 理由 |
+|------|---|---|------|
+| RF-02 | P0 | **P1** | 依赖 RF-01 前置，单独做会误删其他 Repo 数据 |
+| RF-05 | P1 | **P2** | 维护性问题，非集成阻塞 |
+| RF-09 | P1 | **P2** | 建议作为 RF-08 子项同批修复 |
+| RF-16 | P2 | **P1** | 不只是观测，会把故障伪装成"0 结果" |
+
+### 6.3 架构依赖修正
+
+- **RF-01 不是纯 Python 沙箱**：`/document/upload` 和 `/document/split` 未接收 `repo_id`，Java 侧也未透传。必须跨层改动（Java + Python API + Python strategy）。
+- **RF-02 依赖 RF-01 前置**：RF-01 未落地时不能调 `delete_dataset`（会误删其他 Repo），只能调 `delete_documents`。
+
+### 6.4 新增项（Codex v1 发现的遗漏）
+
+| 项目 | 概要 | 影响 |
+|------|------|------|
+| **RF-18** | 版本漂移（v0.20.5 vs v0.23.1；SDK 0.13.0 vs 0.24.0） | 阻塞 RF-08/RF-10 能力边界决策 |
+| **RF-19** | `page_size=1000` 截断误判 | 大 dataset 时 "文档不存在" 误判 |
+| **RF-20** | 集成测试覆盖严重不足 | 版本升级/API 变更无回归兜底 |
+| **RF-21** | `RAGFLOW_DEFAULT_GROUP` 行为不一致 | 漏配环境变量时错误延迟到 chunk_save 才暴露 |
+
+### 6.5 路线调整
+
+- **废弃** A/B/C 路线（未考虑版本基线）
+- **采纳** D 路线（D1 版本基线 → D2 架构前置 → D3 可感知正确性 → D4 可靠性 → D5 大功能）
+
+### 6.6 立即动手建议调整
+
+- **原建议**：RF-01 作为第一个 PR
+- **Codex v1 建议并采纳**：**先做 D1（RF-18 版本基线核实）**，再动 RF-01 跨层改造
+
+### 6.7 未采纳的分歧（如有）
+
+- 暂无。v1 反馈全部采纳。
+
+---
+
+## 7. 下一步行动（锚定 D 路线）
+
+### 7.1 阶段一（D1，本周）
+
+- [ ] 跑 `python -c "import ragflow_sdk; print(ragflow_sdk.__version__)"` 确认 SDK 实装版本
+- [ ] 核实生产/部署环境的 RAGFlow server 镜像 tag
+- [ ] 阅读 RAGFlow v0.20.5 → v0.23.1 的 CHANGELOG / release notes
+- [ ] 决策：保守对齐 v0.20.5 / 激进升级 v0.23.x
+- [ ] 把决策结论回写至 RF-18 章节
+
+### 7.2 阶段二（D2，D1 决策后启动）
+
+- [ ] RF-01 跨层实施（Java 透传 + Python API 接收 + strategy 消费）
+- [ ] 保留 `RAGFLOW_LEGACY_SINGLE_DATASET` 灰度开关
+- [ ] 在当前 `fix/ragflow-dataset-isolation` 分支推进
+
+### 7.3 审核反馈循环
+
+- 每完成 1 个阶段，请 Codex 做增量审核（对照 v1 结论看是否引入新问题）
+- 审核结果以 `## X Codex vN 审核反馈摘要` 追加到本文档
