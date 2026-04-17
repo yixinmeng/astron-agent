@@ -656,7 +656,7 @@ function index() {
                                 }}
                               >
                                 <div
-                                  className="p-1 rounded hover:bg-[#F2F5FE] block"
+                                  className="p-1 rounded hover:bg-[#F2F5FE] block text-[#666666]"
                                   onClick={e => {
                                     e.stopPropagation();
                                     copyBotNow(k.botId);
@@ -666,7 +666,7 @@ function index() {
                                 </div>
                                 {k?.version === 3 && (
                                   <div
-                                    className="p-1 rounded hover:bg-[#F2F5FE] block"
+                                    className="p-1 rounded hover:bg-[#F2F5FE] block text-[#666666]"
                                     onClick={e => {
                                       e.stopPropagation();
                                       setOperationId(null);
@@ -695,7 +695,7 @@ function index() {
                                 )}
                                 {k?.version === 3 && (
                                   <a
-                                    className="p-1 rounded hover:bg-[#F2F5FE] block"
+                                    className="p-1 rounded hover:bg-[#F2F5FE] block text-[#666666]"
                                     href={`${window.location.origin}/xingchen-api/workflow/export/${k?.maasId}`}
                                     download={`${k?.botName}.yml`}
                                     onClick={e => {
