@@ -35,7 +35,8 @@ public class WorkflowTemplateGroupServiceImpl implements WorkflowTemplateGroupSe
                 .isNotNull(ExportedWorkflowTemplate::getGroupId);
         withSpaceScope(templateQueryWrapper);
 
-        Set<Integer> usedGroupIds = exportedWorkflowTemplateMapper.selectList(templateQueryWrapper).stream()
+        Set<Integer> usedGroupIds = exportedWorkflowTemplateMapper.selectList(templateQueryWrapper)
+                .stream()
                 .map(ExportedWorkflowTemplate::getGroupId)
                 .filter(groupId -> groupId != null)
                 .map(Long::intValue)
@@ -44,7 +45,8 @@ public class WorkflowTemplateGroupServiceImpl implements WorkflowTemplateGroupSe
             return Collections.emptyList();
         }
 
-        return botTypeListService.getBotTypeList().stream()
+        return botTypeListService.getBotTypeList()
+                .stream()
                 .filter(botType -> usedGroupIds.contains(botType.getTypeKey()))
                 .map(this::toWorkflowTemplateGroup)
                 .sorted(Comparator.comparing(WorkflowTemplateGroup::getSortIndex, Comparator.nullsLast(Comparator.naturalOrder())))
