@@ -419,6 +419,14 @@ const BaseConfig: React.FC<ChatProps> = ({
     const botDesc = useFormValues
       ? form.getFieldsValue().botDesc
       : baseinfo.botDesc;
+    const botTemplate = useFormValues
+      ? form.getFieldsValue().botTemplate ||
+        baseinfo.botTemplate ||
+        detailInfo.botTemplate ||
+        botTemplateInfoValue.botTemplate
+      : baseinfo.botTemplate ||
+        detailInfo.botTemplate ||
+        botTemplateInfoValue.botTemplate;
 
     return {
       ...(backgroundImgApp && {
@@ -437,6 +445,7 @@ const BaseConfig: React.FC<ChatProps> = ({
       name: name,
       botType: botType,
       botDesc: botDesc,
+      botTemplate,
       supportContext: supportContextFlag ? 1 : 0,
       supportSystem: supportSystemFlag ? 1 : 0,
       promptType: 0,
@@ -647,6 +656,7 @@ const BaseConfig: React.FC<ChatProps> = ({
     obj.botDesc = botTemplateInfoValue.botDesc;
     obj.botName = botTemplateInfoValue.botName;
     obj.botType = botTemplateInfoValue.botType;
+    obj.botTemplate = botTemplateInfoValue.botTemplate;
     setBaseinfo(obj);
     const create = searchParams.get('create');
     if (create) {
