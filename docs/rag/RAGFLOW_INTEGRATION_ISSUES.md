@@ -276,9 +276,9 @@
   | `metadata_condition` | ✅ | ✅ | ❌ | ✅ | **立刻可开放（比 document_ids 更强）** |
   | `highlight` | ✅（字符串比较 bug，见下注） | ✅（规范化） | ❌ | ❌ | **立刻可开放（注意 v0.20.5 bug）** |
   | `rerank_id` | ✅ | ✅ | ✅ | ✅ | **立刻可开放** |
-  | `keyword` | ✅（待 Step B 确认） | ✅ | ✅ | ✅ | **立刻可开放** |
+  | `keyword` | ✅（v0.20.5 line 1445 已实锤） | ✅ | ✅ | ✅ | **立刻可开放** |
   | `toc_enhance` | ❌ | ✅ | ❌ | ✅ | **仅 v0.24.0+** |
-  | `tenant_rerank_id` | ❓（待 Step B 确认） | ❓（待 Step B 确认） | ❌ | ❌ | 待核实 |
+  | `tenant_rerank_id` | ❌ | ❌ | ❌ | ❌ | **Step B 实锤：release tag 零命中，仅 main 分支存在（属未发布特性，忽略）** |
   | `question_history` / `document_ids_for_reranking` | ❌ | ❌ | ❌ | ❌ | **v1 幻觉，确认不存在** |
 
   关键修正：
@@ -985,10 +985,14 @@ if req.get("highlight") == "False" or req.get("highlight") == "false":
 
 **影响**：在 v0.20.5 基线开放 `highlight` 时，客户端传值要特别处理（用 `str()` 序列化，或仅在 >= v0.24.0 时开放）。
 
-#### 发现 5：待 Step B 核实的字段
+#### 发现 5：Step B 核实结果（`keyword` / `tenant_rerank_id`）
 
-- `keyword` 在 v0.20.5 是否存在（v4 首轮 grep 未直接命中）
-- `tenant_rerank_id` 在 v0.20.5 / v0.24.0 是否存在（SDK 均无，Server 层是否另有）
+- **`keyword` 在 v0.20.5 已实锤存在**：`api/apps/sdk/doc.py:1445` `if req.get("keyword", False)`，首轮 grep 漏命中是因为 v0.20.5 把 `keyword` 读取放在 rerank 条件分支内，不在主 req.get 清单位置。
+- **`tenant_rerank_id` 不存在于任何 release tag**：
+  - v0.20.5：`grep -n "tenant_rerank_id" api/apps/sdk/doc.py` 零命中
+  - v0.24.0：同样零命中
+  - main（commit 9410664）：存在，但是属于**未发布的开发版特性**（未来 v0.25+ 才会发布）
+  - 结论：**不纳入 RF-08 可开放字段清单**，避免依赖未发布特性
 
 ### 9.4 对文档各章节的冲击
 
@@ -1032,8 +1036,8 @@ if req.get("highlight") == "False" or req.get("highlight") == "false":
 
 v4 是老王我自核，非外部审核。所有发现直接入文档。
 
-**未处理项**：
-- `keyword` 在 v0.20.5 Server 层的精确行号（Step B 要做）
-- `tenant_rerank_id` 是否在 v0.20.5/v0.24.0 存在（Step B 要做）
+**原"未处理项" Step B 已完成**：
+- ✅ `keyword` 在 v0.20.5 Server 的精确位置：`api/apps/sdk/doc.py:1445`
+- ✅ `tenant_rerank_id` 在 v0.20.5 / v0.24.0 均**不存在**，仅 main 分支有（属未发布特性，不纳入 RF-08）
 
-这两项属于"精细化补全"，不影响 RF-08 核心结论（6 字段开放已被核实）。
+**最终结论**：RF-08 可开放字段数锁定为 **6 个**（v0.20.5 基线）或 **7 个**（若升级到 v0.24.0，多 `toc_enhance`）。核心决策清晰，文档处于 **ready-to-code** 状态。
