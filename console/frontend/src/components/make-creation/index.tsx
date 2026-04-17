@@ -90,8 +90,9 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
 
     try {
       if (useTemplate && item) {
+        const templateId = String(item.templateId || item.id);
         req.templateSource = item.templateSource;
-        req.templateId = item.templateId || item.id;
+        req.templateId = templateId;
         req.name = `${item.title}${Date.now()}`;
         const res = (await createFromTemplate(req)) as {
           flowId?: string | number;
@@ -287,7 +288,9 @@ const MakeCreateModal: React.FC<MakeCreateModalProps> = ({
                               className={styles.templateDeleteBtn}
                               onClick={e => {
                                 e.stopPropagation();
-                                deleteTemplateCard(item.templateId || item.id);
+                                deleteTemplateCard(
+                                  String(item.templateId || item.id)
+                                );
                               }}
                               title={t('createAgent1.deleteTemplate')}
                             >
