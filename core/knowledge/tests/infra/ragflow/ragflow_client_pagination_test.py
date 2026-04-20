@@ -251,3 +251,14 @@ async def test_get_document_info_exception_returns_none() -> None:
     ):
         result = await ragflow_client.get_document_info("ds-1", "doc-x")
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_document_info_empty_doc_id_returns_none_without_network_call() -> (
+    None
+):
+    """Empty ``doc_id`` short-circuits without hitting RAGFlow."""
+    with patch(_LIST_DOCS, new=AsyncMock()) as mock_list:
+        result = await ragflow_client.get_document_info("ds-1", "")
+    assert result is None
+    mock_list.assert_not_called()

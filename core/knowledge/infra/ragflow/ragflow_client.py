@@ -692,6 +692,11 @@ async def get_document_info(dataset_id: str, doc_id: str) -> Optional[Dict[str, 
     Returns:
         Document information dict, or ``None`` if not found / on error.
     """
+    # Defense-in-depth: RAGFlow server truthy-checks ``id``, so ``id=`` on the
+    # wire scans the whole dataset (see docstring above for version refs).
+    if not doc_id:
+        logger.warning(f"empty doc_id for dataset={dataset_id}")
+        return None
     try:
         response = await list_documents_in_dataset(
             dataset_id, doc_id=doc_id, page=1, page_size=1
