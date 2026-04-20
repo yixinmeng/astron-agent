@@ -633,6 +633,8 @@ async def fetch_all_document_chunks(
             ``max_pages`` is exceeded without ``total`` being reached.
     """
     chunks: List[Dict[str, Any]] = []
+    # Optional so a page that drops ``total`` can't downgrade the stop condition.
+    total: Optional[int] = None
     page = 1
     while page <= max_pages:
         resp = await list_document_chunks(
@@ -647,18 +649,20 @@ async def fetch_all_document_chunks(
         data = resp.get("data") or {}
         batch = data.get("chunks") or []
         chunks.extend(batch)
-        total = data.get("total") or 0
-        if len(chunks) >= total:
+        # Missing/None/non-int => keep last-known good value.
+        raw_total = data.get("total")
+        if isinstance(raw_total, int) and raw_total >= 0:
+            total = raw_total
+        if total is not None and len(chunks) >= total:
             return chunks
         if not batch:
-            # Server returned an empty page but ``total`` still exceeds what
-            # we've collected. Treat as a protocol anomaly (stale pagination,
-            # mid-request deletion, or server mis-report) and fail closed —
-            # returning the partial list would let the caller re-insert the
+            # Protocol anomaly (stale pagination, mid-request deletion, or
+            # server mis-report): fail closed to avoid re-inserting the
             # missing chunks as if they didn't exist.
             raise RuntimeError(
                 f"fetch_all_document_chunks: empty page {page} but only "
-                f"{len(chunks)}/{total} chunks fetched for doc={document_id}"
+                f"{len(chunks)}/{total if total is not None else '?'} "
+                f"chunks fetched for doc={document_id}"
             )
         page += 1
     raise RuntimeError(

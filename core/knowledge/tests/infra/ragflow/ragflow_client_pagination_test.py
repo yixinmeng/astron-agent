@@ -121,6 +121,48 @@ async def test_fetch_all_document_chunks_empty_mid_page_raises_fail_closed() -> 
 
 
 @pytest.mark.asyncio
+async def test_fetch_all_document_chunks_missing_total_mid_page_does_not_return_partial() -> (
+    None
+):
+    """Mid-iteration page drops ``total`` while still returning a real batch =>
+    paginator must keep paginating using the last-known total, not hand back a
+    partial list that would let _get_existing_chunks re-insert missing chunks.
+    """
+    page1 = _chunk_page(chunks=[{"id": "c1"}, {"id": "c2"}], total=10)
+    page2_no_total = {"code": 0, "data": {"chunks": [{"id": "c3"}]}}
+    page3_rest = _chunk_page(chunks=[{"id": f"c{i}"} for i in range(4, 11)], total=10)
+    with patch(
+        _LIST_CHUNKS,
+        new=AsyncMock(side_effect=[page1, page2_no_total, page3_rest]),
+    ) as mock_list:
+        result = await ragflow_client.fetch_all_document_chunks(
+            "ds-1", "doc-x", page_size=2
+        )
+    assert [c["id"] for c in result] == [f"c{i}" for i in range(1, 11)]
+    assert mock_list.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_fetch_all_document_chunks_empty_data_envelope_mid_page_raises_fail_closed() -> (
+    None
+):
+    """Mid-iteration page with ``code=0`` but an empty ``data`` envelope
+    (chunks missing AND total missing) must raise, not silently return the
+    so-far list.
+    """
+    page1 = _chunk_page(chunks=[{"id": "c1"}, {"id": "c2"}], total=10)
+    page2_empty_envelope = {"code": 0, "data": {}}
+    with patch(
+        _LIST_CHUNKS,
+        new=AsyncMock(side_effect=[page1, page2_empty_envelope]),
+    ):
+        with pytest.raises(RuntimeError) as exc_info:
+            await ragflow_client.fetch_all_document_chunks("ds-1", "doc-x", page_size=2)
+    assert "doc-x" in str(exc_info.value)
+    assert "empty page 2" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
 async def test_fetch_all_document_chunks_honors_max_pages_safeguard() -> None:
     """Pathological `total` larger than max_pages*page_size => raise after
     max_pages (fail-closed: we cannot distinguish a real huge document from
