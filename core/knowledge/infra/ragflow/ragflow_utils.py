@@ -25,6 +25,9 @@ from knowledge.infra.ragflow.ragflow_client import (
 
 logger = logging.getLogger(__name__)
 
+# Fallback dataset name when ``RAGFLOW_DEFAULT_GROUP`` is unset or empty.
+DEFAULT_RAGFLOW_DATASET_NAME = "Stellar Knowledge Base"
+
 # Module-level locks for dataset creation to prevent race conditions
 _dataset_locks: Dict[str, asyncio.Lock] = {}
 _locks_lock = asyncio.Lock()
@@ -35,10 +38,8 @@ class RagflowUtils:
 
     @staticmethod
     def get_default_dataset_name() -> str:
-        """
-        Get default dataset name from environment variable
-        """
-        return os.getenv("RAGFLOW_DEFAULT_GROUP", "Stellar Knowledge Base")
+        """Return ``RAGFLOW_DEFAULT_GROUP`` or ``DEFAULT_RAGFLOW_DATASET_NAME`` (unset/empty fall back)."""
+        return os.getenv("RAGFLOW_DEFAULT_GROUP") or DEFAULT_RAGFLOW_DATASET_NAME
 
     @staticmethod
     async def get_dataset_id_by_name(dataset_name: str) -> Optional[str]:

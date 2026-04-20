@@ -8,7 +8,6 @@ Provides document processing and knowledge management strategy based on RAGFlow
 
 import json
 import logging
-import os
 import time
 from typing import Any, Dict, List, Optional
 
@@ -236,8 +235,7 @@ class RagflowRAGStrategy(RAGStrategy):
                 }
             ]
         """
-        # Get group parameter, use default if not provided
-        group = os.getenv("RAGFLOW_DEFAULT_GROUP", "Stellar Knowledge Base")
+        group = RagflowUtils.get_default_dataset_name()
         file = kwargs.get("file")
 
         # Parameter validation
@@ -307,12 +305,7 @@ class RagflowRAGStrategy(RAGStrategy):
 
     async def _validate_chunks_save_config(self, doc_id: str) -> str:
         """Validate chunks_save configuration and dataset"""
-        default_group = os.getenv("RAGFLOW_DEFAULT_GROUP")
-        if not default_group:
-            logger.error("RAGFLOW_DEFAULT_GROUP not found in configuration")
-            raise CustomException(
-                CodeEnum.ChunkSaveFailed, "RAGFLOW_DEFAULT_GROUP configuration missing"
-            )
+        default_group = RagflowUtils.get_default_dataset_name()
 
         dataset_id = await RagflowUtils.ensure_dataset(default_group)
         if not dataset_id:
@@ -651,13 +644,7 @@ class RagflowRAGStrategy(RAGStrategy):
 
     async def _validate_chunks_update_config(self) -> str:
         """Validate chunks_update configuration and dataset"""
-        default_group = os.getenv("RAGFLOW_DEFAULT_GROUP")
-        if not default_group:
-            logger.error("RAGFLOW_DEFAULT_GROUP not found in configuration")
-            raise CustomException(
-                CodeEnum.ChunkUpdateFailed,
-                "RAGFLOW_DEFAULT_GROUP configuration missing",
-            )
+        default_group = RagflowUtils.get_default_dataset_name()
 
         dataset_id = await RagflowUtils.ensure_dataset(default_group)
         if not dataset_id:
@@ -855,15 +842,7 @@ class RagflowRAGStrategy(RAGStrategy):
 
         try:
             # 1. Get dataset name from config, then find dataset ID
-            default_group = os.getenv("RAGFLOW_DEFAULT_GROUP")
-            if not default_group:
-                logger.error(
-                    "RAGFLOW_DEFAULT_GROUP not found in config, chunks_delete operation failed"
-                )
-                raise CustomException(
-                    CodeEnum.ChunkDeleteFailed,
-                    "RAGFLOW_DEFAULT_GROUP configuration missing",
-                )
+            default_group = RagflowUtils.get_default_dataset_name()
 
             dataset_id = await RagflowUtils.ensure_dataset(default_group)
             if not dataset_id:
