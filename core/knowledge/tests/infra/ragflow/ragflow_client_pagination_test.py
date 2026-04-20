@@ -18,6 +18,7 @@ from knowledge.infra.ragflow import ragflow_client
 # Mock paths — extracted so a future rename of the client module doesn't
 # require chasing string literals across tests.
 _LIST_CHUNKS = "knowledge.infra.ragflow.ragflow_client.list_document_chunks"
+_LIST_DOCS = "knowledge.infra.ragflow.ragflow_client.list_documents_in_dataset"
 
 
 # ----------------------------------------------------------------------
@@ -138,3 +139,73 @@ async def test_fetch_all_document_chunks_honors_max_pages_safeguard() -> None:
     assert "max_pages" in str(exc_info.value)
     assert "doc-x" in str(exc_info.value)
     assert mock_list.await_count == 3
+
+
+# ----------------------------------------------------------------------
+# Section B: get_document_info
+# ----------------------------------------------------------------------
+
+
+def _docs_page(docs: List[Dict[str, Any]], total: int) -> Dict[str, Any]:
+    """Build a well-formed RAGFlow documents-API response envelope."""
+    return {"code": 0, "data": {"docs": docs, "total": total}}
+
+
+@pytest.mark.asyncio
+async def test_get_document_info_passes_doc_id_as_filter_with_page_size_one() -> None:
+    """Happy path: server-side id filter, single-row page, returns the match."""
+    doc = {"id": "doc-x", "name": "test.pdf", "chunk_count": 3}
+    with patch(
+        _LIST_DOCS,
+        new=AsyncMock(return_value=_docs_page(docs=[doc], total=1)),
+    ) as mock_list:
+        result = await ragflow_client.get_document_info("ds-1", "doc-x")
+    assert result == doc
+    mock_list.assert_awaited_once_with("ds-1", doc_id="doc-x", page=1, page_size=1)
+
+
+@pytest.mark.asyncio
+async def test_get_document_info_non_matching_id_returns_none() -> None:
+    """Server returns docs list without the requested id => None (defensive)."""
+    other = {"id": "doc-y", "name": "other.pdf"}
+    with patch(
+        _LIST_DOCS,
+        new=AsyncMock(return_value=_docs_page(docs=[other], total=1)),
+    ):
+        result = await ragflow_client.get_document_info("ds-1", "doc-x")
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_document_info_empty_docs_returns_none() -> None:
+    """code=0 but docs=[] (id unknown to server, some versions of RAGFlow
+    filter to empty list rather than returning a non-zero code) => None."""
+    with patch(
+        _LIST_DOCS,
+        new=AsyncMock(return_value=_docs_page(docs=[], total=0)),
+    ):
+        result = await ragflow_client.get_document_info("ds-1", "doc-x")
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_document_info_server_error_returns_none() -> None:
+    """Non-zero code (e.g. 'You don't own the document') => None."""
+    error_resp = {"code": 102, "message": "You don't own the document doc-x."}
+    with patch(
+        _LIST_DOCS,
+        new=AsyncMock(return_value=error_resp),
+    ):
+        result = await ragflow_client.get_document_info("ds-1", "doc-x")
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_document_info_exception_returns_none() -> None:
+    """Transport-level exception => None, no propagation."""
+    with patch(
+        _LIST_DOCS,
+        new=AsyncMock(side_effect=RuntimeError("boom")),
+    ):
+        result = await ragflow_client.get_document_info("ds-1", "doc-x")
+    assert result is None

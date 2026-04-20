@@ -325,34 +325,41 @@ class RagflowRAGStrategy(RAGStrategy):
         return dataset_id
 
     async def _validate_document_exists(self, dataset_id: str, doc_id: str) -> None:
-        """Validate if document exists, raise exception if error occurs"""
+        """Validate that the document exists in RAGFlow.
+
+        Delegates to ``ragflow_client.get_document_info`` which uses RAGFlow's
+        server-side ``id`` filter for an O(1) exact lookup (verified against
+        v0.20.5 ~ v0.24.0). Raises ``CustomException(ChunkSaveFailed)`` on
+        not-found or on any underlying error.
+
+        Note on error attribution: ``get_document_info`` swallows transport-level
+        exceptions and returns ``None`` (preserving its null-safe contract).
+        That means a ``None`` here can mean either "document genuinely absent"
+        or "RAGFlow unreachable". The caller's infra-layer logs (from
+        ``get_document_info``'s ``logger.error``) carry the underlying cause;
+        our message below stays neutral rather than asserting the doc is gone.
+        """
         try:
-            docs_response = await ragflow_client.list_documents_in_dataset(
-                dataset_id, doc_id, page=1, page_size=1000
-            )
-
-            if docs_response.get("code") == 0:
-                docs_data = docs_response.get("data", {})
-                docs = docs_data.get("docs", [])
-
-                for doc in docs:
-                    if doc.get("id") == doc_id:
-                        logger.info(f"Document {doc_id} exists in RAGFlow")
-                        return  # Document exists, validation passed
-
-                logger.error(f"Document {doc_id} does not exist in RAGFlow")
-                raise CustomException(
-                    CodeEnum.ChunkSaveFailed, f"Document {doc_id} does not exist"
+            doc = await ragflow_client.get_document_info(dataset_id, doc_id)
+            if doc is None:
+                logger.error(
+                    f"Document {doc_id} not found in RAGFlow "
+                    f"(either absent or RAGFlow unreachable — see infra logs)"
                 )
-            else:
-                logger.error(f"Unable to get document list: {docs_response}")
                 raise CustomException(
-                    CodeEnum.ChunkSaveFailed, "Unable to get document list"
+                    CodeEnum.ChunkSaveFailed,
+                    f"Document {doc_id} not found or RAGFlow unreachable",
                 )
-
+            logger.info(f"Document {doc_id} exists in RAGFlow")
         except CustomException:
-            raise  # Re-raise custom exceptions
+            # Re-raise without re-wrapping; the catch-all below would otherwise
+            # swallow the already-correct code/message from the None branch.
+            raise
         except Exception as e:
+            # Defensive: get_document_info's contract is to swallow all
+            # exceptions and return None, so this branch is normally
+            # unreachable. It covers contract violations (e.g. import-level
+            # failure) and future relaxations of that contract.
             logger.error(f"Error checking document existence: {e}")
             raise CustomException(
                 CodeEnum.ChunkSaveFailed,

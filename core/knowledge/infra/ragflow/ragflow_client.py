@@ -669,30 +669,42 @@ async def fetch_all_document_chunks(
 
 async def get_document_info(dataset_id: str, doc_id: str) -> Optional[Dict[str, Any]]:
     """
-    Get detailed information for a single document
+    Get detailed information for a single document via RAGFlow's id filter.
+
+    Uses the ``id`` query parameter on ``/api/v1/datasets/{dataset_id}/documents``,
+    which performs exact-match filtering server-side (verified against RAGFlow
+    v0.20.5 ~ v0.24.0: ``DocumentService.get_list`` applies
+    ``.where(cls.model.id == id)`` — peewee equality, not ``LIKE``).
+
+    A non-existent ``doc_id`` causes the server handler to return a non-zero
+    ``code`` with a "You don't own the document" message; we treat that as
+    "not found" and return ``None``. Transport-level exceptions are logged
+    and also surface as ``None`` to preserve the original caller contract.
 
     Args:
-        dataset_id: Dataset ID
-        doc_id: Document ID
+        dataset_id: Dataset ID.
+        doc_id: Document ID.
 
     Returns:
-        Document information, returns None if not found
+        Document information dict, or ``None`` if not found / on error.
     """
     try:
-        # Do not pass doc_id parameter, get all documents then iterate to find
         response = await list_documents_in_dataset(
-            dataset_id, doc_id="", page=1, page_size=1000
+            dataset_id, doc_id=doc_id, page=1, page_size=1
         )
-
         if response.get("code") == 0:
-            docs = response.get("data", {}).get("docs", [])
-            for doc in docs:
-                if doc.get("id") == doc_id:
-                    return doc
+            data = response.get("data") or {}
+            docs = data.get("docs") or []
+            # page_size=1 + server-side exact-match filter => at most one doc;
+            # the id re-check is defensive in case a future RAGFlow release
+            # relaxes the filter to LIKE.
+            if docs and docs[0].get("id") == doc_id:
+                return docs[0]
         return None
-
     except Exception as e:
-        logger.error(f"Failed to get document info: {e}")
+        logger.error(
+            f"Failed to get document info for doc={doc_id} in dataset={dataset_id}: {e}"
+        )
         return None
 
 
