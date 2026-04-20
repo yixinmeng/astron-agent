@@ -597,6 +597,76 @@ async def list_document_chunks(
     return await _make_request("GET", endpoint)
 
 
+async def fetch_all_document_chunks(
+    dataset_id: str,
+    document_id: str,
+    page_size: int = 1024,
+    max_pages: int = 1000,
+) -> List[Dict[str, Any]]:
+    """
+    Fetch all chunks for a single document by paginating through the RAGFlow API.
+
+    Uses the server-reported ``total`` field in each response envelope to decide
+    when to stop. **Fail-closed semantics**: any non-zero response ``code``
+    raises ``RuntimeError`` rather than returning partial results. The caller
+    (``RagflowRAGStrategy._get_existing_chunks``) is the reconciliation source
+    of truth for chunk-upsert deduplication, so a partial mapping would cause
+    the reconciler to re-add existing chunks, corrupting the dataset.
+
+    Args:
+        dataset_id: Dataset ID.
+        document_id: Document ID.
+        page_size: Items per page. Default 1024 to match
+            ``list_document_chunks``'s own default — almost every realistic
+            document fits in a single page, so pagination only kicks in for
+            truly large documents.
+        max_pages: Safety cap to prevent runaway loops if the server mis-reports
+            ``total``. Default 1000 => up to ~1M chunks per document with
+            default ``page_size``, well above any realistic single-document
+            chunk count.
+
+    Returns:
+        All chunks flattened into a single list (possibly empty).
+
+    Raises:
+        RuntimeError: on non-zero ``code`` from any paginated call, or when
+            ``max_pages`` is exceeded without ``total`` being reached.
+    """
+    chunks: List[Dict[str, Any]] = []
+    page = 1
+    while page <= max_pages:
+        resp = await list_document_chunks(
+            dataset_id, document_id, page=page, page_size=page_size
+        )
+        if resp.get("code") != 0:
+            raise RuntimeError(
+                f"fetch_all_document_chunks failed on page {page} for "
+                f"doc={document_id}: code={resp.get('code')}, "
+                f"message={resp.get('message')}"
+            )
+        data = resp.get("data") or {}
+        batch = data.get("chunks") or []
+        chunks.extend(batch)
+        total = data.get("total") or 0
+        if len(chunks) >= total:
+            return chunks
+        if not batch:
+            # Server returned an empty page but ``total`` still exceeds what
+            # we've collected. Treat as a protocol anomaly (stale pagination,
+            # mid-request deletion, or server mis-report) and fail closed —
+            # returning the partial list would let the caller re-insert the
+            # missing chunks as if they didn't exist.
+            raise RuntimeError(
+                f"fetch_all_document_chunks: empty page {page} but only "
+                f"{len(chunks)}/{total} chunks fetched for doc={document_id}"
+            )
+        page += 1
+    raise RuntimeError(
+        f"fetch_all_document_chunks exceeded max_pages={max_pages} for "
+        f"doc={document_id}; server may be mis-reporting total"
+    )
+
+
 async def get_document_info(dataset_id: str, doc_id: str) -> Optional[Dict[str, Any]]:
     """
     Get detailed information for a single document
