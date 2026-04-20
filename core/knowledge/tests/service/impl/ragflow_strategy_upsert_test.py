@@ -512,6 +512,55 @@ async def test_split_preserves_custom_exception_from_upsert(
     assert exc_info.value.code == CodeEnum.ChunkDeleteFailed.code
 
 
+@pytest.mark.asyncio
+async def test_split_prefers_kwargs_group_over_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """split() honors kwargs['group'] over the env-loaded default."""
+    strategy = RagflowRAGStrategy()
+    captured: dict[str, Any] = {}
+
+    async def fake_ensure_dataset(group: str) -> str:
+        captured["group"] = group
+        return "ds-1"
+
+    async def fake_get_document_chunks(dataset_id: str, doc_id: str) -> list[Any]:
+        return []
+
+    monkeypatch.setattr(
+        "knowledge.service.impl.ragflow_strategy.RagflowUtils.ensure_dataset",
+        fake_ensure_dataset,
+    )
+    monkeypatch.setattr(
+        "knowledge.service.impl.ragflow_strategy.RagflowUtils.get_document_chunks",
+        fake_get_document_chunks,
+    )
+    monkeypatch.setattr(
+        "knowledge.service.impl.ragflow_strategy.RagflowUtils.convert_to_standard_format",
+        lambda doc_id, chunks: [],
+    )
+
+    with (
+        patch.object(
+            strategy,
+            "_process_document_upload",
+            new=AsyncMock(return_value="some-doc-id"),
+        ),
+        patch.object(
+            strategy,
+            "_handle_document_parsing",
+            new=AsyncMock(return_value=None),
+        ),
+    ):
+        await strategy.split(
+            file=object(),
+            document_id=None,
+            group="UserProvidedKB",
+        )
+
+    assert captured["group"] == "UserProvidedKB"
+
+
 # ----------------------------------------------------------------------
 # Section D: /knowledge/v1/document/upload — documentId form field passthrough
 # ----------------------------------------------------------------------

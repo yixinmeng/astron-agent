@@ -235,7 +235,7 @@ class RagflowRAGStrategy(RAGStrategy):
                 }
             ]
         """
-        group = RagflowUtils.get_default_dataset_name()
+        group = kwargs.get("group") or RagflowUtils.get_default_dataset_name()
         file = kwargs.get("file")
 
         # Parameter validation
