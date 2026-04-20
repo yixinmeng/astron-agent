@@ -5,7 +5,7 @@ import CrashErrorComponent from '@/components/crash-error-component';
 import Sidebar from '@/components/sidebar';
 import Header from '@/components/header';
 
-const hasHeaderList = ['knowledge', 'plugin', 'database', 'rpa'];
+const hasHeaderList = ['skill', 'knowledge', 'plugin', 'database', 'rpa'];
 
 interface BasicLayoutProps {
   showHeader?: boolean;
@@ -49,6 +49,13 @@ const BasicLayout: FC<BasicLayoutProps> = ({ showHeader }) => {
             detail: { type },
           });
           window.dispatchEvent(createEvent);
+          break;
+        }
+        case 'skill': {
+          const createSkillEvent = new CustomEvent('headerCreateSkill', {
+            detail: { type },
+          });
+          window.dispatchEvent(createSkillEvent);
           break;
         }
         case 'database': {

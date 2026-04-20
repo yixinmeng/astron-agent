@@ -93,6 +93,25 @@ class Knowledge(BaseModel):
         return self
 
 
+class Skill(BaseModel):
+    """Skill entry configuration for agent.
+
+    :param repoId: Skill repository identifier
+    :param name: Skill display name
+    :param description: Skill summary text
+    :param fileId: Entry file identifier
+    :param entryFileName: Entry file name, usually SKILL.md
+    :param content: Fully resolved skill content for on-demand tool loading
+    """
+
+    repoId: str = Field(..., min_length=1)
+    name: str = Field(default="")
+    description: str = Field(default="")
+    fileId: str = Field(default="")
+    entryFileName: str = Field(default="")
+    content: str = Field(default="")
+
+
 class AgentNodePlugin(BaseModel):
     """Plugin configuration for agent node.
 
@@ -108,6 +127,7 @@ class AgentNodePlugin(BaseModel):
     tools: list = Field(...)
     workflowIds: List[str] = Field(...)
     knowledge: List[Knowledge] = Field(default_factory=list)
+    skills: List[Skill] = Field(default_factory=list)
 
 
 class AgentNodeMessage:
@@ -416,6 +436,7 @@ class AgentNode(BaseNode):
                 "knowledge": keys_to_snake_case(
                     [k.dict() for k in self.plugin.knowledge]
                 ),
+                "skills": keys_to_snake_case([s.dict() for s in self.plugin.skills]),
             },
             "uid": span.uid,
             "messages": messages,

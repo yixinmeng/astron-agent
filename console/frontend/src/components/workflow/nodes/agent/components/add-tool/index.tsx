@@ -26,6 +26,7 @@ import {
 } from '@/components/modal/plugin';
 import MCPDetail from './components/mcp-detail';
 import KnowledgeList from './components/knowledge-list';
+import SkillList from './components/skill-list';
 import { configListRepos } from '@/services/knowledge';
 import { useTranslation } from 'react-i18next';
 import { useAddPluginType } from '@/components/workflow/types';
@@ -194,6 +195,34 @@ const useToolData = ({
       });
   }
 
+  function getSkillsList(): void {
+    if (toolRef.current) {
+      toolRef.current.scrollTop = 0;
+    }
+    setLoading(true);
+    loadingRef.current = true;
+    configListRepos({
+      pageNo: 1,
+      pageSize: 999,
+      content: contentRef?.current,
+      orderBy,
+      tag: 'SKILL',
+    })
+      .then(data => {
+        const newData = data?.pageData?.map(item => ({
+          ...item,
+          updateTime: dayjs(item?.updateTime)?.format('YYYY-MM-DD HH:mm:ss'),
+          createTime: dayjs(item?.createTime)?.format('YYYY-MM-DD HH:mm:ss'),
+        }));
+        setDataSource(() => [...(newData || [])]);
+        setHasMore(false);
+      })
+      .finally(() => {
+        setLoading(false);
+        loadingRef.current = false;
+      });
+  }
+
   function getMcpServerList(): void {
     if (toolRef.current) {
       toolRef.current.scrollTop = 0;
@@ -229,6 +258,8 @@ const useToolData = ({
         getMcpServerList();
       } else if (currentTab === 'knowledge') {
         getKnowledgesList();
+      } else if (currentTab === 'skill') {
+        getSkillsList();
       }
     }
   }, [currentTab, orderFlag, pagination, orderBy]);
@@ -288,7 +319,12 @@ const useAddPlugin = ({
     (tool): unknown => {
       handleAddTool({
         ...tool,
-        type: currentTab === 'mcp' ? 'mcp' : 'tool',
+        type:
+          currentTab === 'mcp'
+            ? 'mcp'
+            : currentTab === 'skill'
+              ? 'skill'
+              : 'tool',
         icon: tool?.icon,
       });
     },
@@ -391,6 +427,13 @@ const LeftNav = ({
         >
           <i className="mcp"></i>
           <span className="mt-0.5">MCP</span>
+        </div>
+        <div
+          className={`create-tool-tab-normal ${currentTab === 'skill' ? 'create-tool-tab-active' : ''}`}
+          onClick={() => handleChangeTab('skill')}
+        >
+          <i className="knowledge"></i>
+          <span className="mt-0.5">Skill</span>
         </div>
         <div
           className={`create-tool-tab-normal ${currentTab === 'knowledge' ? 'create-tool-tab-active' : ''}`}
@@ -779,6 +822,17 @@ const RightContent = ({
           toolRef={toolRef}
           orderBy={orderBy}
           setOrderBy={setOrderBy}
+          searchValue={searchValue}
+          handleInputChange={handleInputChange}
+          toolsList={toolsList}
+          loading={loading}
+          handleAddTool={handleAddTool}
+        />
+      )}
+      {!operate && currentTab === 'skill' && (
+        <SkillList
+          dataSource={dataSource}
+          toolRef={toolRef}
           searchValue={searchValue}
           handleInputChange={handleInputChange}
           toolsList={toolsList}

@@ -37,6 +37,7 @@ import com.iflytek.astron.console.commons.util.SseEmitterUtil;
 import com.iflytek.astron.console.commons.util.space.SpaceInfoUtil;
 import com.iflytek.astron.console.toolkit.common.Result;
 import com.iflytek.astron.console.toolkit.common.constant.CommonConst;
+import com.iflytek.astron.console.toolkit.common.constant.ProjectContent;
 import com.iflytek.astron.console.toolkit.common.constant.WorkflowConst;
 import com.iflytek.astron.console.toolkit.config.properties.ApiUrl;
 import com.iflytek.astron.console.toolkit.config.properties.BizConfig;
@@ -2343,10 +2344,13 @@ public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
 
         // (2.2) Knowledge: aggregate docIds based on repoIds
         JSONArray knowledgeArray = plugin.getJSONArray("knowledge");
-        if (knowledgeArray == null || knowledgeArray.isEmpty()) {
-            return;
+        if (knowledgeArray != null && !knowledgeArray.isEmpty()) {
+            enrichKnowledgeDocIds(knowledgeArray);
         }
-        enrichKnowledgeDocIds(knowledgeArray);
+        JSONArray skillsArray = plugin.getJSONArray("skills");
+        if (skillsArray != null && !skillsArray.isEmpty()) {
+            enrichSkills(skillsArray);
+        }
     }
 
     /** Check whether it is an AGENT node and has valid metadata */
@@ -2456,6 +2460,104 @@ public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
             }
         }
         return allDocIds;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void enrichSkills(JSONArray skillsArray) {
+        for (int i = 0; i < skillsArray.size(); i++) {
+            Object obj = skillsArray.get(i);
+            if (!(obj instanceof Map skillObj)) {
+                continue;
+            }
+            String repoId = Optional.ofNullable(skillObj.get("repoId"))
+                    .map(String::valueOf)
+                    .filter(StringUtils::isNotBlank)
+                    .orElse("");
+            if (StringUtils.isBlank(repoId)) {
+                continue;
+            }
+
+            FileInfoV2 skillEntryFile = findSkillEntryFile(repoId);
+            if (skillEntryFile == null) {
+                log.warn("No SKILL.md entry file found for repoId={}", repoId);
+                continue;
+            }
+
+            String content = readSkillContent(skillEntryFile.getAddress());
+            Map<String, String> metadata = extractSkillMetadata(skillEntryFile.getName(), content);
+            skillObj.put("fileId", String.valueOf(skillEntryFile.getId()));
+            skillObj.put("entryFileName", skillEntryFile.getName());
+            skillObj.put("name", metadata.getOrDefault("name", skillEntryFile.getName()));
+            skillObj.put("description", metadata.getOrDefault("description", ""));
+            skillObj.put("content", content);
+        }
+    }
+
+    private FileInfoV2 findSkillEntryFile(String repoId) {
+        List<FileInfoV2> fileInfoList = fileInfoV2Mapper.getFileInfoV2ByCoreRepoId(repoId);
+        if (CollUtil.isEmpty(fileInfoList)) {
+            return null;
+        }
+        return fileInfoList.stream()
+                .filter(file -> ProjectContent.isSkillCompatible(file.getSource()))
+                .sorted(Comparator
+                        .comparing((FileInfoV2 file) -> !StringUtils.equalsIgnoreCase(file.getName(), "SKILL.md"))
+                        .thenComparing(file -> !StringUtils.endsWithIgnoreCase(file.getName(), ".md"))
+                        .thenComparing(FileInfoV2::getCreateTime, Comparator.nullsLast(Comparator.naturalOrder())))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private String readSkillContent(String address) {
+        if (StringUtils.isBlank(address)) {
+            return "";
+        }
+        try (InputStream inputStream = s3Util.getObject(address)) {
+            if (inputStream == null) {
+                return "";
+            }
+            return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.error("Failed to read skill content from object storage, address={}", address, e);
+            return "";
+        }
+    }
+
+    private Map<String, String> extractSkillMetadata(String fileName, String content) {
+        Map<String, String> result = new HashMap<>();
+        String defaultName = StringUtils.substringBeforeLast(
+                StringUtils.defaultIfBlank(fileName, "SKILL"),
+                ".");
+        result.put("name", defaultName);
+        result.put("description", "");
+
+        if (StringUtils.isBlank(content)) {
+            return result;
+        }
+
+        Matcher frontmatterMatcher = Pattern.compile("(?s)^---\\s*\\r?\\n(.*?)\\r?\\n---\\s*").matcher(content);
+        if (!frontmatterMatcher.find()) {
+            return result;
+        }
+        String frontmatter = frontmatterMatcher.group(1);
+        Matcher nameMatcher = Pattern.compile("(?m)^name\\s*:\\s*(.+?)\\s*$").matcher(frontmatter);
+        if (nameMatcher.find()) {
+            result.put("name", cleanYamlValue(nameMatcher.group(1)));
+        }
+        Matcher descriptionMatcher = Pattern.compile("(?m)^description\\s*:\\s*(.+?)\\s*$").matcher(frontmatter);
+        if (descriptionMatcher.find()) {
+            result.put("description", cleanYamlValue(descriptionMatcher.group(1)));
+        }
+        return result;
+    }
+
+    private String cleanYamlValue(String value) {
+        String cleaned = StringUtils.trimToEmpty(value);
+        if ((cleaned.startsWith("\"") && cleaned.endsWith("\""))
+                || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+            cleaned = cleaned.substring(1, cleaned.length() - 1);
+        }
+        return cleaned.trim();
     }
 
     private void dealWithUrl(JSONObject modelConfig, String serviceId) {
