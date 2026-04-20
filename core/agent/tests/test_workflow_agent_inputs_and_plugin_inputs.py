@@ -8,6 +8,7 @@ from agent.api.schemas.workflow_agent_inputs import (
     CustomCompletionPluginInputs,
     CustomCompletionPluginKnowledgeInputs,
     CustomCompletionPluginKnowledgeMatchInputs,
+    CustomCompletionPluginSkillInputs,
 )
 
 
@@ -54,6 +55,21 @@ class TestWorkflowAgentInputsModels:
         assert p.mcp_server_urls == []
         assert p.workflow_ids == []
         assert p.knowledge == []
+        assert p.skills == []
+
+    def test_plugin_skill_inputs(self) -> None:
+        skill = CustomCompletionPluginSkillInputs(
+            repo_id="repo-1",
+            name="skill-one",
+            description="desc",
+            file_id="file-1",
+            entry_file_name="SKILL.md",
+            content="body",
+        )
+
+        assert skill.repo_id == "repo-1"
+        assert skill.entry_file_name == "SKILL.md"
+        assert skill.content == "body"
 
     def test_custom_completion_inputs_with_alias(self) -> None:
         inputs = CustomCompletionInputs(

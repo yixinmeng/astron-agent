@@ -395,8 +395,8 @@ public class FileInfoV2Service extends ServiceImpl<FileInfoV2Mapper, FileInfoV2>
         fileInfoV2.setSize(size);
         fileInfoV2.setCharCount(charCount);
         fileInfoV2.setType(getFileFormat(originalFilename));
-        fileInfoV2.setStatus(ProjectContent.FILE_UPLOAD_STATUS);
-        fileInfoV2.setEnabled(enable);
+        fileInfoV2.setStatus(ProjectContent.isSkillCompatible(tag) ? ProjectContent.FILE_PARSE_SUCCESSED : ProjectContent.FILE_UPLOAD_STATUS);
+        fileInfoV2.setEnabled(ProjectContent.isSkillCompatible(tag) ? 1 : enable);
         fileInfoV2.setPid(parentId);
         fileInfoV2.setSource(tag);
         if (SpaceInfoUtil.getSpaceId() != null) {
@@ -409,6 +409,95 @@ public class FileInfoV2Service extends ServiceImpl<FileInfoV2Mapper, FileInfoV2>
 
         this.save(fileInfoV2);
         return fileInfoV2;
+    }
+
+    /**
+     * Load raw file content from object storage.
+     *
+     * @param fileId file id
+     * @return editable file content payload
+     */
+    public FileContentDto getFileContent(Long fileId) {
+        FileInfoV2 fileInfoV2 = this.getById(fileId);
+        if (fileInfoV2 == null) {
+            throw new BusinessException(ResponseEnum.REPO_FILE_NOT_EXIST);
+        }
+        if (SpaceInfoUtil.getSpaceId() == null) {
+            dataPermissionCheckTool.checkFileBelong(fileInfoV2);
+        }
+
+        String content = "";
+        try (InputStream inputStream = s3UtilClient.getObject(fileInfoV2.getAddress())) {
+            if (inputStream != null) {
+                content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            }
+        } catch (IOException e) {
+            log.error("Failed to read file content, fileId={}", fileId, e);
+            throw new BusinessException(ResponseEnum.REPO_FILE_UPLOAD_FAILED);
+        }
+
+        FileContentDto dto = new FileContentDto();
+        dto.setFileId(fileInfoV2.getId());
+        dto.setRepoId(fileInfoV2.getRepoId());
+        dto.setName(fileInfoV2.getName());
+        dto.setType(fileInfoV2.getType());
+        dto.setSource(fileInfoV2.getSource());
+        dto.setContent(content);
+        dto.setCharCount(fileInfoV2.getCharCount());
+        dto.setSize(fileInfoV2.getSize());
+        dto.setUpdateTime(fileInfoV2.getUpdateTime() == null ? null : fileInfoV2.getUpdateTime().toString());
+        return dto;
+    }
+
+    /**
+     * Update raw file content and sync metadata to the file table.
+     *
+     * @param fileContentVO update payload
+     */
+    @Transactional
+    public void updateFileContent(UpdateFileContentVO fileContentVO) {
+        if (fileContentVO == null || fileContentVO.getFileId() == null) {
+            throw new BusinessException(ResponseEnum.REPO_FILE_NOT_EXIST);
+        }
+        FileInfoV2 fileInfoV2 = this.getById(fileContentVO.getFileId());
+        if (fileInfoV2 == null) {
+            throw new BusinessException(ResponseEnum.REPO_FILE_NOT_EXIST);
+        }
+        if (SpaceInfoUtil.getSpaceId() == null) {
+            dataPermissionCheckTool.checkFileBelong(fileInfoV2);
+        }
+
+        String content = Optional.ofNullable(fileContentVO.getContent()).orElse("");
+        byte[] data = content.getBytes(StandardCharsets.UTF_8);
+        String contentType = resolveContentType(fileInfoV2.getType());
+        s3UtilClient.putObject(fileInfoV2.getAddress(), data, contentType);
+
+        Timestamp now = new Timestamp(System.currentTimeMillis());
+        fileInfoV2.setCharCount((long) content.length());
+        fileInfoV2.setSize((long) data.length);
+        fileInfoV2.setUpdateTime(now);
+        if (ProjectContent.isSkillCompatible(fileInfoV2.getSource())) {
+            fileInfoV2.setStatus(ProjectContent.FILE_PARSE_SUCCESSED);
+            fileInfoV2.setEnabled(1);
+        }
+        this.updateById(fileInfoV2);
+    }
+
+    private String resolveContentType(String fileType) {
+        if (StringUtils.isBlank(fileType)) {
+            return "text/plain; charset=utf-8";
+        }
+        return switch (fileType.toLowerCase(Locale.ROOT)) {
+            case "md" -> "text/markdown; charset=utf-8";
+            case "json" -> "application/json; charset=utf-8";
+            case "yaml", "yml" -> "application/x-yaml; charset=utf-8";
+            case "xml" -> "application/xml; charset=utf-8";
+            case "csv" -> "text/csv; charset=utf-8";
+            case "py" -> "text/x-python; charset=utf-8";
+            case "js" -> "text/javascript; charset=utf-8";
+            case "ts" -> "text/typescript; charset=utf-8";
+            default -> "text/plain; charset=utf-8";
+        };
     }
 
     /**

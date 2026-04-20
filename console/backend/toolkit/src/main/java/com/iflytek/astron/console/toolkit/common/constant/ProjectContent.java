@@ -70,6 +70,7 @@ public class ProjectContent {
     public static final String FILE_SOURCE_CBG_RAG_STR = "CBG-RAG";
     public static final String FILE_SOURCE_RAG_FLOW_RAG_STR = "Ragflow-RAG";
     public static final String FILE_SOURCE_SPARK_RAG_STR = "SparkDesk-RAG";
+    public static final String FILE_SOURCE_SKILL_STR = "SKILL";
 
 
     // Custom user token for launching evaluation service
@@ -142,5 +143,15 @@ public class ProjectContent {
             return FILE_SOURCE_SPARK_RAG_STR.equals(source);
         }
         return bizConfig.getSparkRagCompatibleSources().contains(source);
+    }
+
+    /**
+     * Check whether the source belongs to the skill file system.
+     *
+     * @param source source tag
+     * @return true when the source is the local skill repository type
+     */
+    public static boolean isSkillCompatible(String source) {
+        return FILE_SOURCE_SKILL_STR.equals(source);
     }
 }

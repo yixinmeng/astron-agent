@@ -143,7 +143,7 @@ const PluginSection = ({
                     src={
                       tool?.type === 'tool'
                         ? Icons.agent.toolIcon
-                        : tool?.type === 'knowledge'
+                        : tool?.type === 'knowledge' || tool?.type === 'skill'
                           ? Icons.agent.knowledgeIcon
                           : tool?.icon
                     }
@@ -161,7 +161,9 @@ const PluginSection = ({
                       ? t('workflow.nodes.agentNode.tool')
                       : tool?.type === 'knowledge'
                         ? t('workflow.nodes.agentNode.knowledgeBase')
-                        : t('workflow.nodes.agentNode.mcpServer')}
+                        : tool?.type === 'skill'
+                          ? 'Skill'
+                          : t('workflow.nodes.agentNode.mcpServer')}
                   </div>
                   {tool?.isLatest === false && (
                     <div
@@ -549,6 +551,22 @@ const useAgent = ({
               },
             ];
           }
+        } else if (tool?.type === 'skill') {
+          if (old.data.nodeParam.plugin?.skills) {
+            old.data.nodeParam.plugin.skills.push({
+              repoId: tool.toolId,
+              name: tool.name,
+              description: tool.description,
+            });
+          } else {
+            old.data.nodeParam.plugin.skills = [
+              {
+                repoId: tool.toolId,
+                name: tool.name,
+                description: tool.description,
+              },
+            ];
+          }
         }
         old.data.nodeParam.plugin.toolsList.push({
           toolId: tool?.toolId,
@@ -574,6 +592,11 @@ const useAgent = ({
             old.data.nodeParam.plugin.knowledge.filter(
               item => item?.match?.repoIds?.[0] !== tool?.toolId
             );
+        } else if (findTool?.type === 'skill') {
+          old.data.nodeParam.plugin.skills =
+            old.data.nodeParam.plugin.skills.filter(
+              item => item?.repoId !== tool?.toolId
+            );
         }
         old.data.nodeParam.plugin.toolsList =
           old.data.nodeParam.plugin.toolsList.filter(
@@ -589,6 +612,7 @@ const useAgent = ({
 
   const orderToolsList = useMemo(() => {
     return [
+      ...toolsList.filter(item => item?.type === 'skill'),
       ...toolsList.filter(item => item?.type === 'knowledge'),
       ...toolsList.filter(item => item?.type === 'tool'),
       ...toolsList.filter(item => item?.type === 'mcp'),

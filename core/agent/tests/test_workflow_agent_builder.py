@@ -16,6 +16,7 @@ from agent.api.schemas.workflow_agent_inputs import (
     CustomCompletionPluginInputs,
     CustomCompletionPluginKnowledgeInputs,
     CustomCompletionPluginKnowledgeMatchInputs,
+    CustomCompletionPluginSkillInputs,
 )
 from agent.service.builder.workflow_agent_builder import (
     KnowledgeQueryParams,
@@ -288,6 +289,23 @@ class TestWorkflowAgentRunnerBuilder:
         assert "Context 1" in backgrounds
         assert "Context 2" in backgrounds
         assert "Context 3" in backgrounds
+
+    def test_build_skill_instruction(self, builder: WorkflowAgentRunnerBuilder) -> None:
+        skill_instruction = builder.build_skill_instruction(
+            [
+                CustomCompletionPluginSkillInputs(
+                    repo_id="repo-1",
+                    name="skill-one",
+                    description="first skill",
+                    entry_file_name="SKILL.md",
+                    content="body",
+                )
+            ]
+        )
+
+        assert "Available skills:" in skill_instruction
+        assert "skill-one: first skill" in skill_instruction
+        assert "call the corresponding skill tool" in skill_instruction
 
     @pytest.mark.asyncio
     async def test_exec_query_knowledge(

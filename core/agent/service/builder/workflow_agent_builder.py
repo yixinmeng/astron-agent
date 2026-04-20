@@ -8,6 +8,7 @@ from common.otlp.trace.span import Span
 from agent.api.schemas.workflow_agent_inputs import (
     CustomCompletionInputs,
     CustomCompletionPluginKnowledgeInputs,
+    CustomCompletionPluginSkillInputs,
 )
 from agent.service.builder.base_builder import (
     BaseApiBuilder,
@@ -15,6 +16,7 @@ from agent.service.builder.base_builder import (
     RunnerParams,
 )
 from agent.service.plugin.knowledge import KnowledgePluginFactory
+from agent.service.plugin.skill import SkillPluginFactory
 from agent.service.runner.workflow_agent_runner import WorkflowAgentRunner
 
 
@@ -49,14 +51,22 @@ class WorkflowAgentRunnerBuilder(BaseApiBuilder):
                 mcp_server_urls=self.inputs.plugin.mcp_server_urls,
                 workflow_ids=self.inputs.plugin.workflow_ids,
             )
+            plugins.extend(SkillPluginFactory(skills=self.inputs.plugin.skills).gen())
             metadata_list, knowledge = await self.query_knowledge_by_workflow(
                 self.inputs.plugin.knowledge, sp
+            )
+            skill_instruction = self.build_skill_instruction(self.inputs.plugin.skills)
+            answer_instruction = self.merge_instruction(
+                self.inputs.instruction.answer, skill_instruction
+            )
+            reasoning_instruction = self.merge_instruction(
+                self.inputs.instruction.reasoning, skill_instruction
             )
 
             chat_params = RunnerParams(
                 model=model,
                 chat_history=self.inputs.get_chat_history(),
-                instruct=self.inputs.instruction.answer,
+                instruct=answer_instruction,
                 knowledge=knowledge,
                 question=self.inputs.get_last_message_content(),
             )
@@ -64,7 +74,7 @@ class WorkflowAgentRunnerBuilder(BaseApiBuilder):
             process_params = RunnerParams(
                 model=model,
                 chat_history=self.inputs.get_chat_history(),
-                instruct=self.inputs.instruction.answer,
+                instruct=answer_instruction,
                 knowledge=knowledge,
                 question=self.inputs.get_last_message_content(),
             )
@@ -73,7 +83,7 @@ class WorkflowAgentRunnerBuilder(BaseApiBuilder):
                 model=model,
                 plugins=plugins,
                 chat_history=self.inputs.get_chat_history(),
-                instruct=self.inputs.instruction.reasoning,
+                instruct=reasoning_instruction,
                 knowledge=knowledge,
                 question=self.inputs.get_last_message_content(),
                 process_runner=process_runner,
@@ -87,6 +97,31 @@ class WorkflowAgentRunnerBuilder(BaseApiBuilder):
                 plugins=plugins,
                 knowledge_metadata_list=metadata_list,
             )
+
+    def build_skill_instruction(
+        self, skills: list[CustomCompletionPluginSkillInputs]
+    ) -> str:
+        if not skills:
+            return ""
+
+        lines = [
+            "Available skills:",
+        ]
+        for skill in skills:
+            name = (skill.name or skill.entry_file_name or skill.repo_id).strip()
+            description = (skill.description or "No description provided.").strip()
+            lines.append(f"- {name}: {description}")
+        lines.append(
+            "If a user request matches one of these skills, call the corresponding skill tool to load the full SKILL.md before following it."
+        )
+        return "\n".join(lines)
+
+    def merge_instruction(self, base: str, extra: str) -> str:
+        if not extra:
+            return base
+        if not base:
+            return extra
+        return f"{base}\n\n{extra}"
 
     async def query_knowledge_by_workflow(
         self, knowledge_list: list[CustomCompletionPluginKnowledgeInputs], span: Span
