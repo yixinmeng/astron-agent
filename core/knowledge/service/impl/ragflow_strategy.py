@@ -318,34 +318,41 @@ class RagflowRAGStrategy(RAGStrategy):
         return dataset_id
 
     async def _validate_document_exists(self, dataset_id: str, doc_id: str) -> None:
-        """Validate if document exists, raise exception if error occurs"""
+        """Validate that the document exists in RAGFlow.
+
+        Delegates to ``ragflow_client.get_document_info`` which uses RAGFlow's
+        server-side ``id`` filter for an O(1) exact lookup (verified against
+        v0.20.5 ~ v0.24.0). Raises ``CustomException(ChunkSaveFailed)`` on
+        not-found or on any underlying error.
+
+        Note on error attribution: ``get_document_info`` swallows transport-level
+        exceptions and returns ``None`` (preserving its null-safe contract).
+        That means a ``None`` here can mean either "document genuinely absent"
+        or "RAGFlow unreachable". The caller's infra-layer logs (from
+        ``get_document_info``'s ``logger.error``) carry the underlying cause;
+        our message below stays neutral rather than asserting the doc is gone.
+        """
         try:
-            docs_response = await ragflow_client.list_documents_in_dataset(
-                dataset_id, doc_id, page=1, page_size=1000
-            )
-
-            if docs_response.get("code") == 0:
-                docs_data = docs_response.get("data", {})
-                docs = docs_data.get("docs", [])
-
-                for doc in docs:
-                    if doc.get("id") == doc_id:
-                        logger.info(f"Document {doc_id} exists in RAGFlow")
-                        return  # Document exists, validation passed
-
-                logger.error(f"Document {doc_id} does not exist in RAGFlow")
-                raise CustomException(
-                    CodeEnum.ChunkSaveFailed, f"Document {doc_id} does not exist"
+            doc = await ragflow_client.get_document_info(dataset_id, doc_id)
+            if doc is None:
+                logger.error(
+                    f"Document {doc_id} not found in RAGFlow "
+                    f"(either absent or RAGFlow unreachable — see infra logs)"
                 )
-            else:
-                logger.error(f"Unable to get document list: {docs_response}")
                 raise CustomException(
-                    CodeEnum.ChunkSaveFailed, "Unable to get document list"
+                    CodeEnum.ChunkSaveFailed,
+                    f"Document {doc_id} not found or RAGFlow unreachable",
                 )
-
+            logger.info(f"Document {doc_id} exists in RAGFlow")
         except CustomException:
-            raise  # Re-raise custom exceptions
+            # Re-raise without re-wrapping; the catch-all below would otherwise
+            # swallow the already-correct code/message from the None branch.
+            raise
         except Exception as e:
+            # Defensive: get_document_info's contract is to swallow all
+            # exceptions and return None, so this branch is normally
+            # unreachable. It covers contract violations (e.g. import-level
+            # failure) and future relaxations of that contract.
             logger.error(f"Error checking document existence: {e}")
             raise CustomException(
                 CodeEnum.ChunkSaveFailed,
@@ -355,39 +362,48 @@ class RagflowRAGStrategy(RAGStrategy):
     async def _get_existing_chunks(
         self, dataset_id: str, doc_id: str
     ) -> Dict[str, Dict]:
-        """Get mapping of existing chunks"""
-        existing_chunks = {}
+        """Get mapping of existing chunks for a document.
+
+        Uses ``ragflow_client.fetch_all_document_chunks`` to paginate through
+        all chunks via the server-reported ``total`` field, so documents with
+        large chunk counts are fully covered.
+
+        **Fail-closed**: errors propagate rather than being swallowed into an
+        empty dict — a partial or empty mapping would cause
+        ``_process_single_chunk`` to treat existing chunks as missing and
+        re-insert them, corrupting the dataset with duplicates. The caller
+        ``chunks_save`` converts any ``Exception`` to
+        ``CustomException(ChunkSaveFailed)``, so transient RAGFlow failures
+        during reconciliation abort the upsert cleanly.
+        """
+        existing_chunks: Dict[str, Dict] = {}
         try:
-            chunks_response = await ragflow_client.list_document_chunks(
-                dataset_id, doc_id, page=1, page_size=1000
+            all_chunks = await ragflow_client.fetch_all_document_chunks(
+                dataset_id, doc_id
             )
-            if chunks_response.get("code") == 0:
-                chunks_data = chunks_response.get("data", {})
-                existing_chunk_list = chunks_data.get("chunks", [])
+        except Exception:
+            # Log doc/dataset context before re-raising — the upstream
+            # chunks_save catch-all only sees the exception message, so
+            # without this line the doc_id is lost in production triage.
+            logger.error(
+                f"fetch_all_document_chunks failed for doc={doc_id} "
+                f"in dataset={dataset_id}"
+            )
+            raise
 
-                for chunk in existing_chunk_list:
-                    # Get various identifiers of chunk
-                    data_index = str(chunk.get("dataIndex", ""))
-                    chunk_id = chunk.get("id") or chunk.get("chunk_id")
+        for chunk in all_chunks:
+            data_index = str(chunk.get("dataIndex", ""))
+            chunk_id = chunk.get("id") or chunk.get("chunk_id")
 
-                    if chunk_id:
-                        # Use chunk_id as primary key (corresponding to dataIndex in split results)
-                        existing_chunks[str(chunk_id)] = chunk
+            if chunk_id:
+                existing_chunks[str(chunk_id)] = chunk
+                if data_index:
+                    existing_chunks[data_index] = chunk
 
-                        # If dataIndex exists, also use as backup key
-                        if data_index:
-                            existing_chunks[data_index] = chunk
-
-                logger.info(
-                    f"Document {doc_id} already has {len(existing_chunk_list)} chunks, established {len(existing_chunks)} mappings"
-                )
-            else:
-                logger.info(
-                    f"Unable to get existing chunks or document does not exist: {chunks_response}"
-                )
-        except Exception as e:
-            logger.warning(f"Error checking existing chunks: {e}")
-
+        logger.info(
+            f"Document {doc_id} already has {len(all_chunks)} chunks, "
+            f"established {len(existing_chunks)} mappings"
+        )
         return existing_chunks
 
     async def _process_single_chunk(

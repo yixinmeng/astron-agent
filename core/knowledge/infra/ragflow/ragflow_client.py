@@ -597,32 +597,123 @@ async def list_document_chunks(
     return await _make_request("GET", endpoint)
 
 
-async def get_document_info(dataset_id: str, doc_id: str) -> Optional[Dict[str, Any]]:
+async def fetch_all_document_chunks(
+    dataset_id: str,
+    document_id: str,
+    page_size: int = 1024,
+    max_pages: int = 1000,
+) -> List[Dict[str, Any]]:
     """
-    Get detailed information for a single document
+    Fetch all chunks for a single document by paginating through the RAGFlow API.
+
+    Uses the server-reported ``total`` field in each response envelope to decide
+    when to stop. **Fail-closed semantics**: any non-zero response ``code``
+    raises ``RuntimeError`` rather than returning partial results. The caller
+    (``RagflowRAGStrategy._get_existing_chunks``) is the reconciliation source
+    of truth for chunk-upsert deduplication, so a partial mapping would cause
+    the reconciler to re-add existing chunks, corrupting the dataset.
 
     Args:
-        dataset_id: Dataset ID
-        doc_id: Document ID
+        dataset_id: Dataset ID.
+        document_id: Document ID.
+        page_size: Items per page. Default 1024 to match
+            ``list_document_chunks``'s own default — almost every realistic
+            document fits in a single page, so pagination only kicks in for
+            truly large documents.
+        max_pages: Safety cap to prevent runaway loops if the server mis-reports
+            ``total``. Default 1000 => up to ~1M chunks per document with
+            default ``page_size``, well above any realistic single-document
+            chunk count.
 
     Returns:
-        Document information, returns None if not found
+        All chunks flattened into a single list (possibly empty).
+
+    Raises:
+        RuntimeError: on non-zero ``code`` from any paginated call, or when
+            ``max_pages`` is exceeded without ``total`` being reached.
     """
-    try:
-        # Do not pass doc_id parameter, get all documents then iterate to find
-        response = await list_documents_in_dataset(
-            dataset_id, doc_id="", page=1, page_size=1000
+    chunks: List[Dict[str, Any]] = []
+    # Optional so a page that drops ``total`` can't downgrade the stop condition.
+    total: Optional[int] = None
+    page = 1
+    while page <= max_pages:
+        resp = await list_document_chunks(
+            dataset_id, document_id, page=page, page_size=page_size
         )
+        if resp.get("code") != 0:
+            raise RuntimeError(
+                f"fetch_all_document_chunks failed on page {page} for "
+                f"doc={document_id}: code={resp.get('code')}, "
+                f"message={resp.get('message')}"
+            )
+        data = resp.get("data") or {}
+        batch = data.get("chunks") or []
+        chunks.extend(batch)
+        # Missing/None/non-int => keep last-known good value.
+        raw_total = data.get("total")
+        if isinstance(raw_total, int) and raw_total >= 0:
+            total = raw_total
+        if total is not None and len(chunks) >= total:
+            return chunks
+        if not batch:
+            # Protocol anomaly (stale pagination, mid-request deletion, or
+            # server mis-report): fail closed to avoid re-inserting the
+            # missing chunks as if they didn't exist.
+            raise RuntimeError(
+                f"fetch_all_document_chunks: empty page {page} but only "
+                f"{len(chunks)}/{total if total is not None else '?'} "
+                f"chunks fetched for doc={document_id}"
+            )
+        page += 1
+    raise RuntimeError(
+        f"fetch_all_document_chunks exceeded max_pages={max_pages} for "
+        f"doc={document_id}; server may be mis-reporting total"
+    )
 
-        if response.get("code") == 0:
-            docs = response.get("data", {}).get("docs", [])
-            for doc in docs:
-                if doc.get("id") == doc_id:
-                    return doc
+
+async def get_document_info(dataset_id: str, doc_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get detailed information for a single document via RAGFlow's id filter.
+
+    Uses the ``id`` query parameter on ``/api/v1/datasets/{dataset_id}/documents``,
+    which performs exact-match filtering server-side (verified against RAGFlow
+    v0.20.5 ~ v0.24.0: ``DocumentService.get_list`` applies
+    ``.where(cls.model.id == id)`` — peewee equality, not ``LIKE``).
+
+    A non-existent ``doc_id`` causes the server handler to return a non-zero
+    ``code`` with a "You don't own the document" message; we treat that as
+    "not found" and return ``None``. Transport-level exceptions are logged
+    and also surface as ``None`` to preserve the original caller contract.
+
+    Args:
+        dataset_id: Dataset ID.
+        doc_id: Document ID.
+
+    Returns:
+        Document information dict, or ``None`` if not found / on error.
+    """
+    # Defense-in-depth: RAGFlow server truthy-checks ``id``, so ``id=`` on the
+    # wire scans the whole dataset (see docstring above for version refs).
+    if not doc_id:
+        logger.warning(f"empty doc_id for dataset={dataset_id}")
         return None
-
+    try:
+        response = await list_documents_in_dataset(
+            dataset_id, doc_id=doc_id, page=1, page_size=1
+        )
+        if response.get("code") == 0:
+            data = response.get("data") or {}
+            docs = data.get("docs") or []
+            # page_size=1 + server-side exact-match filter => at most one doc;
+            # the id re-check is defensive in case a future RAGFlow release
+            # relaxes the filter to LIKE.
+            if docs and docs[0].get("id") == doc_id:
+                return docs[0]
+        return None
     except Exception as e:
-        logger.error(f"Failed to get document info: {e}")
+        logger.error(
+            f"Failed to get document info for doc={doc_id} in dataset={dataset_id}: {e}"
+        )
         return None
 
 
