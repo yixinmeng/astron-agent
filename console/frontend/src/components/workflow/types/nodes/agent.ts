@@ -26,7 +26,6 @@ export interface AgentNodeParam {
     mcpServerIds?: string[];
     tools?: ToolConfig[];
     knowledge?: KnowledgeConfig[];
-    skills?: SkillConfig[];
   };
   enableChatHistoryV2?: {
     isEnabled: boolean;
@@ -44,7 +43,7 @@ export interface ToolItem {
   id?: string;
   toolId: string;
   name: string;
-  type: 'tool' | 'knowledge' | 'mcp' | 'skill';
+  type: 'tool' | 'knowledge' | 'mcp';
   icon?: string;
   tag?: string;
   isLatest?: boolean;
@@ -68,15 +67,6 @@ export interface KnowledgeConfig {
     repoIds: string[];
   };
   repoType: number;
-}
-
-export interface SkillConfig {
-  repoId: string;
-  name?: string;
-  description?: string;
-  fileId?: string;
-  entryFileName?: string;
-  content?: string;
 }
 
 export interface AgentStrategy {

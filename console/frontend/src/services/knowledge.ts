@@ -33,11 +33,9 @@ import {
   FileStatusResponse,
   KnowledgeOperationResponse,
   FileDirectoryTreeResponse,
-  FileContentItem,
   FileSummaryResponse,
   ConfigResponse,
   RepoUseStatusResponse,
-  UpdateFileContentParams,
 } from '@/types/resource';
 
 export async function createKnowledgeAPI(
@@ -126,18 +124,6 @@ export async function updateFileAPI(
   params: UpdateFileParams
 ): Promise<KnowledgeOperationResponse> {
   return await http.post(`/file/update-file`, params);
-}
-
-export async function getFileContentAPI(
-  fileId: number | string
-): Promise<FileContentItem> {
-  return await http.get(`/file/content?fileId=${fileId}`);
-}
-
-export async function updateFileContentAPI(
-  params: UpdateFileContentParams
-): Promise<KnowledgeOperationResponse> {
-  return await http.post(`/file/content`, params);
 }
 
 export async function enableFlieAPI(
