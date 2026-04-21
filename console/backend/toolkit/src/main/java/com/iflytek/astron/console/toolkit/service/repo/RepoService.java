@@ -157,9 +157,7 @@ public class RepoService extends ServiceImpl<RepoMapper, Repo> {
         }
 
         // Check tag
-        if (!ProjectContent.isCbgRagCompatible(repoVO.getTag())
-                && !ProjectContent.isAiuiRagCompatible(repoVO.getTag())
-                && !ProjectContent.isSkillCompatible(repoVO.getTag())) {
+        if (!ProjectContent.isCbgRagCompatible(repoVO.getTag()) && !ProjectContent.isAiuiRagCompatible(repoVO.getTag())) {
             throw new BusinessException(ResponseEnum.REPO_TYPE_NOT_MATCH);
         }
         // 1. Create knowledge base

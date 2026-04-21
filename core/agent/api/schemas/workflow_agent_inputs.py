@@ -32,15 +32,6 @@ class CustomCompletionPluginKnowledgeInputs(BaseModel):
     repo_type: int = Field(..., ge=1, le=3)
 
 
-class CustomCompletionPluginSkillInputs(BaseModel):
-    repo_id: str = Field(..., min_length=1)
-    name: str = Field(default="")
-    description: str = Field(default="")
-    file_id: str = Field(default="")
-    entry_file_name: str = Field(default="")
-    content: str = Field(default="")
-
-
 class CustomCompletionPluginInputs(BaseModel):
     tools: List[Union[str, Dict[str, Any]]] = Field(default_factory=list)
     mcp_server_ids: list[str] = Field(default_factory=list)
@@ -48,9 +39,6 @@ class CustomCompletionPluginInputs(BaseModel):
     workflow_ids: list[str] = Field(default_factory=list)
     knowledge: list[CustomCompletionPluginKnowledgeInputs] = Field(
         default_factory=list[CustomCompletionPluginKnowledgeInputs]
-    )
-    skills: list[CustomCompletionPluginSkillInputs] = Field(
-        default_factory=list[CustomCompletionPluginSkillInputs]
     )
 
 

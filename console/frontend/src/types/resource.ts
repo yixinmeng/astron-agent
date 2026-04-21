@@ -161,7 +161,6 @@ export type AvatarType = {
 export interface CreateKnowledgeParams {
   name: string;
   description?: string;
-  desc?: string;
   icon?: string;
   color?: string;
   visibility?: number;
@@ -170,7 +169,6 @@ export interface CreateKnowledgeParams {
   indexType?: string;
   spaceId?: string;
   appId?: string;
-  tag?: string;
 }
 
 // 更新知识库参数
@@ -188,10 +186,8 @@ export interface UpdateRepoParams {
 
 // 知识库列表查询参数
 export interface ListReposParams {
-  pageNo?: number;
   page?: number;
   pageSize?: number;
-  content?: string;
   name?: string;
   userId?: string;
   spaceId?: string;
@@ -237,12 +233,9 @@ export interface FileItem {
 export interface QueryFileListParams {
   repoId: number | string;
   parentId?: number | string;
-  pageNo?: number;
   page?: number;
   pageSize?: number;
   name?: string;
-  tag?: string;
-  isRepoPage?: number;
 }
 
 // 创建文件夹参数
@@ -265,7 +258,6 @@ export interface UpdateFolderParams {
 export interface UpdateFileParams {
   id: number | string;
   name?: string;
-  parentId?: number | string;
   content?: string;
 }
 
@@ -500,23 +492,6 @@ export interface FileInfoV2 {
   updateTime: string;
   downloadUrl: string | null;
   spaceId: string | null;
-}
-
-export interface FileContentItem {
-  fileId: number;
-  repoId: number;
-  name: string;
-  type: string;
-  source: string;
-  content: string;
-  charCount: number;
-  size: number;
-  updateTime: string | null;
-}
-
-export interface UpdateFileContentParams {
-  fileId: number | string;
-  content: string;
 }
 
 // 文件摘要响应

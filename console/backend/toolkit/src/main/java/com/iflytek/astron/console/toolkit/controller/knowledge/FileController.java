@@ -8,7 +8,6 @@ import com.iflytek.astron.console.commons.response.ApiResult;
 import com.iflytek.astron.console.toolkit.common.Result;
 import com.iflytek.astron.console.toolkit.common.anno.ResponseResultBody;
 import com.iflytek.astron.console.toolkit.entity.common.PageData;
-import com.iflytek.astron.console.toolkit.entity.dto.FileContentDto;
 import com.iflytek.astron.console.toolkit.entity.dto.FileInfoV2Dto;
 import com.iflytek.astron.console.toolkit.entity.dto.KnowledgeDto;
 import com.iflytek.astron.console.toolkit.entity.pojo.FileSummary;
@@ -314,29 +313,6 @@ public class FileController {
     @PostMapping("/update-file")
     public ApiResult<Void> updateFile(@RequestBody CreateFolderVO folderVO) {
         fileInfoV2Service.updateFile(folderVO);
-        return ApiResult.success();
-    }
-
-    /**
-     * Read raw file content for online editing.
-     *
-     * @param fileId target file id
-     * @return file content payload
-     */
-    @GetMapping("/content")
-    public ApiResult<FileContentDto> getFileContent(@RequestParam("fileId") Long fileId) {
-        return ApiResult.success(fileInfoV2Service.getFileContent(fileId));
-    }
-
-    /**
-     * Overwrite raw file content for online editing.
-     *
-     * @param fileContentVO update payload
-     * @return operation result
-     */
-    @PostMapping("/content")
-    public ApiResult<Void> updateFileContent(@RequestBody UpdateFileContentVO fileContentVO) {
-        fileInfoV2Service.updateFileContent(fileContentVO);
         return ApiResult.success();
     }
 

@@ -25,15 +25,6 @@ const tabs = [
     createButtonKey: 'create-plugin',
   },
   {
-    key: 'skill',
-    path: '/resource/skill',
-    iconClass: 'knowledge-icon',
-    title: 'Skill',
-    searchPlaceholder: 'common.inputPlaceholder',
-    createButtonText: '新建 Skill',
-    createButtonKey: 'create-skill',
-  },
-  {
     key: 'knowledge',
     path: '/resource/knowledge',
     iconClass: 'knowledge-icon',
