@@ -658,6 +658,88 @@ def test_file_upload_endpoint_with_document_id_passes_value_to_strategy(
     ), f"Expected document_id='doc-old', got {captured.get('document_id')!r}"
 
 
+def test_file_split_endpoint_no_document_id_passes_none_to_strategy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """POST /knowledge/v1/document/split WITHOUT documentId JSON field =>
+    strategy.split receives document_id=None."""
+    from fastapi.testclient import TestClient
+
+    app, _api_module = _build_test_app_for_upload(monkeypatch)
+
+    captured: dict[str, Any] = {}
+
+    async def fake_split(self: Any, **kwargs: Any) -> list[Any]:
+        captured.update(kwargs)
+        captured.pop("span", None)
+        return []
+
+    from knowledge.service.impl.ragflow_strategy import RagflowRAGStrategy
+
+    monkeypatch.setattr(RagflowRAGStrategy, "split", fake_split)
+
+    from knowledge.api.v1.api import get_app_id
+
+    app.dependency_overrides[get_app_id] = lambda: "test-app"
+
+    client = TestClient(app)
+    resp = client.post(
+        "/knowledge/v1/document/split",
+        json={"file": "https://example.com/a.txt", "ragType": "Ragflow-RAG"},
+    )
+
+    assert (
+        resp.status_code == 200
+    ), f"Expected 200, got {resp.status_code}, body={resp.text}"
+    assert (
+        "document_id" in captured
+    ), "Expected split() to receive document_id kwarg (value may be None)"
+    assert captured["document_id"] is None
+
+
+def test_file_split_endpoint_with_document_id_passes_value_to_strategy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """POST /knowledge/v1/document/split WITH documentId=doc-old =>
+    strategy.split receives document_id='doc-old' so the upsert path
+    deduplicates the re-slice instead of creating a new RAGFlow doc."""
+    from fastapi.testclient import TestClient
+
+    app, _api_module = _build_test_app_for_upload(monkeypatch)
+
+    captured: dict[str, Any] = {}
+
+    async def fake_split(self: Any, **kwargs: Any) -> list[Any]:
+        captured.update(kwargs)
+        captured.pop("span", None)
+        return []
+
+    from knowledge.service.impl.ragflow_strategy import RagflowRAGStrategy
+
+    monkeypatch.setattr(RagflowRAGStrategy, "split", fake_split)
+
+    from knowledge.api.v1.api import get_app_id
+
+    app.dependency_overrides[get_app_id] = lambda: "test-app"
+
+    client = TestClient(app)
+    resp = client.post(
+        "/knowledge/v1/document/split",
+        json={
+            "file": "https://example.com/a.txt",
+            "ragType": "Ragflow-RAG",
+            "documentId": "doc-old",
+        },
+    )
+
+    assert (
+        resp.status_code == 200
+    ), f"Expected 200, got {resp.status_code}, body={resp.text}"
+    assert (
+        captured.get("document_id") == "doc-old"
+    ), f"Expected document_id='doc-old', got {captured.get('document_id')!r}"
+
+
 # ----------------------------------------------------------------------
 # Section E: cross-strategy **kwargs forward-compat regression guard
 # ----------------------------------------------------------------------

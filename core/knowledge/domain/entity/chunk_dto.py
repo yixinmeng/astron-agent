@@ -33,6 +33,7 @@ class FileSplitReq(BaseModel):
         separator: Separator list, optional
         cutOff: Cutoff marker list, optional
         titleSplit: Whether to split by title, default is False
+        documentId: Existing RAGFlow doc id for re-slice upsert, optional
     """
 
     file: str = Field(..., min_length=1, description="Required, minimum length 1")
@@ -48,6 +49,13 @@ class FileSplitReq(BaseModel):
     cutOff: Optional[List[str]] = Field(default=None, description="Cutoff marker list")
     titleSplit: Optional[bool] = Field(
         default=False, description="Whether to split by title"
+    )
+    documentId: Optional[str] = Field(
+        default=None,
+        description=(
+            "Existing RAGFlow doc id, triggers blue-green upsert. "
+            "Omit or leave empty for first-time slicing."
+        ),
     )
 
 

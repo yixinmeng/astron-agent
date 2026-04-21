@@ -179,6 +179,7 @@ async def file_split(
             separator=split_request.separator,
             titleSplit=split_request.titleSplit,
             cutOff=split_request.cutOff,
+            document_id=split_request.documentId,
         )
 
 

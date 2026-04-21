@@ -75,6 +75,20 @@ class TestFileSplitReq:
         assert "file" in field_names
         assert "ragType" in field_names
 
+    def test_document_id_default_none(self) -> None:
+        """Test documentId defaults to None for first-time slicing."""
+        req = FileSplitReq(file="test content", ragType=RAGType.RagFlow_RAG)
+        assert req.documentId is None
+
+    def test_document_id_accepts_string(self) -> None:
+        """Test documentId accepts existing RAGFlow doc id for re-slice upsert."""
+        req = FileSplitReq(
+            file="test content",
+            ragType=RAGType.RagFlow_RAG,
+            documentId="doc-abc-123",
+        )
+        assert req.documentId == "doc-abc-123"
+
 
 class TestChunkSaveReq:
     """Test ChunkSaveReq model."""
