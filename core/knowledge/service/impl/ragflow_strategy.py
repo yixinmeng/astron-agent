@@ -12,7 +12,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from knowledge.consts.error_code import CodeEnum
-from knowledge.exceptions.exception import CustomException
+from knowledge.exceptions.exception import CustomException, ThirdPartyException
 from knowledge.infra.ragflow import ragflow_client
 from knowledge.infra.ragflow.ragflow_utils import RagflowUtils
 from knowledge.service.rag_strategy import RAGStrategy
@@ -84,8 +84,12 @@ class RagflowRAGStrategy(RAGStrategy):
             )
 
             if ragflow_response.get("code") != 0:
+                msg = ragflow_response.get("message", "Unknown error")
                 logger.error("RAGFlow query failed: %s", ragflow_response)
-                return {"query": query, "count": 0, "results": []}
+                raise ThirdPartyException(
+                    msg=f"RAGFlow retrieval failed: {msg}",
+                    e=CodeEnum.RAGFLOW_RAGError,
+                )
 
             # Parse response and convert format
             results = RagflowUtils.convert_ragflow_query_response(
@@ -98,9 +102,16 @@ class RagflowRAGStrategy(RAGStrategy):
             logger.info("Query completed, returning %d results", len(results))
             return {"query": query, "count": len(results), "results": results}
 
+        except CustomException:
+            raise
+        except ThirdPartyException:
+            raise
         except Exception as e:
             logger.error("RAGFlow query exception: %s", e)
-            return {"query": query, "count": 0, "results": []}
+            raise ThirdPartyException(
+                msg=f"RAGFlow retrieval failed: {e}",
+                e=CodeEnum.RAGFLOW_RAGError,
+            ) from e
 
     def _validate_split_parameters(
         self, fileUrl: Optional[str], file: Optional[Any]
@@ -325,34 +336,26 @@ class RagflowRAGStrategy(RAGStrategy):
         v0.20.5 ~ v0.24.0). Raises ``CustomException(ChunkSaveFailed)`` on
         not-found or on any underlying error.
 
-        Note on error attribution: ``get_document_info`` swallows transport-level
-        exceptions and returns ``None`` (preserving its null-safe contract).
-        That means a ``None`` here can mean either "document genuinely absent"
-        or "RAGFlow unreachable". The caller's infra-layer logs (from
-        ``get_document_info``'s ``logger.error``) carry the underlying cause;
-        our message below stays neutral rather than asserting the doc is gone.
+        ``get_document_info`` returns ``None`` only for the server's
+        ``DATA_ERROR`` (code=102) "not owned / not found" path, raises
+        ``ThirdPartyException`` for other non-zero codes, and lets transport
+        errors propagate. The generic ``except Exception`` branch below wraps
+        all raised errors into ``CustomException(ChunkSaveFailed)`` so the
+        chunk-save caller sees a consistent error code.
         """
         try:
             doc = await ragflow_client.get_document_info(dataset_id, doc_id)
             if doc is None:
-                logger.error(
-                    f"Document {doc_id} not found in RAGFlow "
-                    f"(either absent or RAGFlow unreachable — see infra logs)"
-                )
+                logger.error(f"Document {doc_id} not found in RAGFlow")
                 raise CustomException(
                     CodeEnum.ChunkSaveFailed,
-                    f"Document {doc_id} not found or RAGFlow unreachable",
+                    f"Document {doc_id} not found",
                 )
             logger.info(f"Document {doc_id} exists in RAGFlow")
         except CustomException:
-            # Re-raise without re-wrapping; the catch-all below would otherwise
-            # swallow the already-correct code/message from the None branch.
+            # Preserve the code/message from the None branch.
             raise
         except Exception as e:
-            # Defensive: get_document_info's contract is to swallow all
-            # exceptions and return None, so this branch is normally
-            # unreachable. It covers contract violations (e.g. import-level
-            # failure) and future relaxations of that contract.
             logger.error(f"Error checking document existence: {e}")
             raise CustomException(
                 CodeEnum.ChunkSaveFailed,
@@ -917,10 +920,12 @@ class RagflowRAGStrategy(RAGStrategy):
             )
 
             if first_response.get("code") != 0:
-                logger.warning(
-                    f"Failed to get chunks: {first_response.get('message', 'Unknown error')}"
+                msg = first_response.get("message", "Unknown error")
+                logger.warning(f"Failed to get chunks: {msg}")
+                raise ThirdPartyException(
+                    msg=f"RAGFlow query_doc doc={docId}: {msg}",
+                    e=CodeEnum.RAGFLOW_RAGError,
                 )
-                return []
 
             total_count = first_response.get("data", {}).get("total", 0)
             if total_count == 0:
@@ -935,10 +940,12 @@ class RagflowRAGStrategy(RAGStrategy):
             )
 
             if chunks_response.get("code") != 0:
-                logger.warning(
-                    f"Failed to get all chunks: {chunks_response.get('message', 'Unknown error')}"
+                msg = chunks_response.get("message", "Unknown error")
+                logger.warning(f"Failed to get all chunks: {msg}")
+                raise ThirdPartyException(
+                    msg=f"RAGFlow query_doc doc={docId}: {msg}",
+                    e=CodeEnum.RAGFLOW_RAGError,
                 )
-                return []
 
             logger.info(
                 f"Successfully retrieved {len(chunks_response.get('data', {}).get('chunks', []))} chunks"
@@ -964,9 +971,14 @@ class RagflowRAGStrategy(RAGStrategy):
             logger.info(f"Successfully converted {len(chunk_infos)} ChunkInfo objects")
             return chunk_infos
 
+        except CustomException:
+            raise
         except Exception as e:
             logger.error(f"Failed to query document chunk information: {e}")
-            return []
+            raise ThirdPartyException(
+                msg=f"RAGFlow query_doc failed for doc={docId}: {e}",
+                e=CodeEnum.RAGFLOW_RAGError,
+            ) from e
 
     async def query_doc_name(
         self, docId: str, **kwargs: Any
@@ -1009,9 +1021,14 @@ class RagflowRAGStrategy(RAGStrategy):
             )
             return file_info
 
+        except CustomException:
+            raise
         except Exception as e:
             logger.error(f"Failed to query document information: {e}")
-            return None
+            raise ThirdPartyException(
+                msg=f"RAGFlow query_doc_name failed for doc={docId}: {e}",
+                e=CodeEnum.RAGFLOW_RAGError,
+            ) from e
 
     async def _upsert_document(
         self,
