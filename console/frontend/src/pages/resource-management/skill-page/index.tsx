@@ -39,6 +39,7 @@ import {
   moveSkillEntry,
   renameSkillEntry,
   updateSkillFileContent,
+  uploadSkillDirectory,
   uploadSkillFiles,
 } from '@/services/skill';
 import { SkillFileContent, SkillTreeNode } from '@/types/skill';
@@ -51,7 +52,8 @@ type DialogMode = 'folder' | 'file' | 'rename' | null;
 function SkillPage(): React.ReactElement {
   const { message } = App.useApp();
   const [form] = Form.useForm();
-  const uploadRef = useRef<HTMLInputElement | null>(null);
+  const fileUploadRef = useRef<HTMLInputElement | null>(null);
+  const directoryUploadRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<{
     scrollToTop: () => void;
     scrollToBottom: () => void;
@@ -92,6 +94,15 @@ function SkillPage(): React.ReactElement {
         window.clearTimeout(revalidateTimerRef.current);
       }
     };
+  }, []);
+
+  useEffect(() => {
+    const input = directoryUploadRef.current;
+    if (!input) {
+      return;
+    }
+    input.setAttribute('webkitdirectory', '');
+    input.setAttribute('directory', '');
   }, []);
 
   const nodeMap = useMemo(() => {
@@ -425,12 +436,15 @@ function SkillPage(): React.ReactElement {
       selectedNode?.entryType === 'folder'
         ? selectedNode.id
         : selectedNode?.parentId || 0;
+    if (!parentId) {
+      message.warning('请先选中一个目录，再上传文件');
+      return;
+    }
     submittingRef.current = true;
     setSubmitting(true);
     try {
       const uploaded = await uploadSkillFiles(parentId, Array.from(files));
       message.success(`已上传 ${uploaded.length} 个文件`);
-      const firstFile = uploaded[0];
       setTreeData(prev =>
         uploaded.reduce(
           (nextTree, file) =>
@@ -439,22 +453,41 @@ function SkillPage(): React.ReactElement {
         )
       );
       setExpandedKeys(prev => mergeExpandedKeys(prev, [parentId]));
-      scheduleRevalidate(
-        keywordRef.current,
-        firstFile?.id || selectedIdRef.current
-      );
-      if (firstFile) {
-        setSelectedId(firstFile.id);
-        setCurrentFile(firstFile);
-        setEditorValue(firstFile.content || '');
-        setMode(firstFile.fileExt === 'md' ? 'preview' : 'edit');
-        setDirty(false);
-      }
+      await refreshTree(keywordRef.current, parentId);
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
-      if (uploadRef.current) {
-        uploadRef.current.value = '';
+      if (fileUploadRef.current) {
+        fileUploadRef.current.value = '';
+      }
+    }
+  };
+
+  const handleDirectoryUpload = async (
+    files: FileList | null
+  ): Promise<void> => {
+    if (submittingRef.current || !files?.length) {
+      return;
+    }
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const createdRoots = await uploadSkillDirectory(Array.from(files));
+      message.success(`Directory upload success: ${files.length} files`);
+      setExpandedKeys(prev =>
+        mergeExpandedKeys(
+          prev,
+          createdRoots
+            .filter(node => node.entryType === 'folder')
+            .map(node => node.id)
+        )
+      );
+      await refreshTree(keywordRef.current, selectedIdRef.current);
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+      if (directoryUploadRef.current) {
+        directoryUploadRef.current.value = '';
       }
     }
   };
@@ -577,7 +610,7 @@ function SkillPage(): React.ReactElement {
           </Button>
           <Button
             icon={<UploadOutlined />}
-            onClick={() => uploadRef.current?.click()}
+            onClick={() => fileUploadRef.current?.click()}
           >
             上传文件
           </Button>
@@ -676,12 +709,18 @@ function SkillPage(): React.ReactElement {
   return (
     <div className={styles.page}>
       <input
-        ref={uploadRef}
+        ref={fileUploadRef}
         type="file"
         accept={FILE_ACCEPT}
         multiple
         hidden
         onChange={event => void handleUpload(event.target.files)}
+      />
+      <input
+        ref={directoryUploadRef}
+        type="file"
+        hidden
+        onChange={event => void handleDirectoryUpload(event.target.files)}
       />
       <div className={styles.shell}>
         <div className={`${styles.panel} ${styles.sidebar}`}>
@@ -709,9 +748,9 @@ function SkillPage(): React.ReactElement {
               </Button>
               <Button
                 icon={<UploadOutlined />}
-                onClick={() => uploadRef.current?.click()}
+                onClick={() => directoryUploadRef.current?.click()}
               >
-                上传
+                上传目录
               </Button>
             </div>
             {loading ? (
