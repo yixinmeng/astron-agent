@@ -22,10 +22,17 @@ except ImportError:
     # Handle missing ragflow_sdk dependency
     RAGFlow = None  # type: ignore[assignment]
 
+from knowledge.consts.error_code import CodeEnum
+from knowledge.exceptions.exception import ThirdPartyException
+
 # Import constants module to ensure environment variables are loaded properly
 # from knowledge.consts import constants
 
 logger = logging.getLogger(__name__)
+
+# RAGFlow RetCode.DATA_ERROR (102) is used for missing / not-owned documents.
+# Other non-zero codes are treated as service failures.
+_RAGFLOW_DATA_ERROR = 102
 
 # Module-level configuration cache and session management
 _config_cache = None
@@ -680,41 +687,51 @@ async def get_document_info(dataset_id: str, doc_id: str) -> Optional[Dict[str, 
     v0.20.5 ~ v0.24.0: ``DocumentService.get_list`` applies
     ``.where(cls.model.id == id)`` — peewee equality, not ``LIKE``).
 
-    A non-existent ``doc_id`` causes the server handler to return a non-zero
-    ``code`` with a "You don't own the document" message; we treat that as
-    "not found" and return ``None``. Transport-level exceptions are logged
-    and also surface as ``None`` to preserve the original caller contract.
+    Return contract:
+
+    - ``code == 0`` with matching doc: return the doc dict.
+    - ``code == 0`` with no matching doc: return ``None``.
+    - ``code == DATA_ERROR`` (102): return ``None`` (server's
+      "not owned / not found" response).
+    - Any other non-zero ``code``: raise ``ThirdPartyException``.
+    - Transport-level exceptions propagate unchanged.
 
     Args:
         dataset_id: Dataset ID.
         doc_id: Document ID.
 
     Returns:
-        Document information dict, or ``None`` if not found / on error.
+        Document information dict, or ``None`` if the document does not
+        exist. Raises on protocol / transport errors.
     """
     # Defense-in-depth: RAGFlow server truthy-checks ``id``, so ``id=`` on the
     # wire scans the whole dataset (see docstring above for version refs).
     if not doc_id:
         logger.warning(f"empty doc_id for dataset={dataset_id}")
         return None
-    try:
-        response = await list_documents_in_dataset(
-            dataset_id, doc_id=doc_id, page=1, page_size=1
-        )
-        if response.get("code") == 0:
-            data = response.get("data") or {}
-            docs = data.get("docs") or []
-            # page_size=1 + server-side exact-match filter => at most one doc;
-            # the id re-check is defensive in case a future RAGFlow release
-            # relaxes the filter to LIKE.
-            if docs and docs[0].get("id") == doc_id:
-                return docs[0]
+    response = await list_documents_in_dataset(
+        dataset_id, doc_id=doc_id, page=1, page_size=1
+    )
+    code = response.get("code")
+    if code == 0:
+        data = response.get("data") or {}
+        docs = data.get("docs") or []
+        # page_size=1 + server-side exact-match filter => at most one doc;
+        # the id re-check is defensive in case a future RAGFlow release
+        # relaxes the filter to LIKE.
+        if docs and docs[0].get("id") == doc_id:
+            return docs[0]
         return None
-    except Exception as e:
-        logger.error(
-            f"Failed to get document info for doc={doc_id} in dataset={dataset_id}: {e}"
-        )
+    if code == _RAGFLOW_DATA_ERROR:
         return None
+    msg = response.get("message", "Unknown error")
+    raise ThirdPartyException(
+        msg=(
+            f"RAGFlow get_document_info doc={doc_id} dataset={dataset_id}: "
+            f"code={code} message={msg}"
+        ),
+        e=CodeEnum.RAGFLOW_RAGError,
+    )
 
 
 async def delete_documents(dataset_id: str, document_ids: List[str]) -> Dict[str, Any]:

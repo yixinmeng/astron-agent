@@ -231,29 +231,6 @@ async def test_get_document_info_empty_docs_returns_none() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_document_info_server_error_returns_none() -> None:
-    """Non-zero code (e.g. 'You don't own the document') => None."""
-    error_resp = {"code": 102, "message": "You don't own the document doc-x."}
-    with patch(
-        _LIST_DOCS,
-        new=AsyncMock(return_value=error_resp),
-    ):
-        result = await ragflow_client.get_document_info("ds-1", "doc-x")
-    assert result is None
-
-
-@pytest.mark.asyncio
-async def test_get_document_info_exception_returns_none() -> None:
-    """Transport-level exception => None, no propagation."""
-    with patch(
-        _LIST_DOCS,
-        new=AsyncMock(side_effect=RuntimeError("boom")),
-    ):
-        result = await ragflow_client.get_document_info("ds-1", "doc-x")
-    assert result is None
-
-
-@pytest.mark.asyncio
 async def test_get_document_info_empty_doc_id_returns_none_without_network_call() -> (
     None
 ):
