@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, patch
 import aiohttp
 import pytest
 
+from knowledge.consts.error_code import CodeEnum
 from knowledge.exceptions.exception import ThirdPartyException
 from knowledge.service.impl.ragflow_strategy import RagflowRAGStrategy
 
@@ -187,6 +188,23 @@ async def test_query_doc_raises_on_ragflow_error_code() -> None:
 
 
 @pytest.mark.asyncio
+async def test_query_doc_preserves_third_party_exception() -> None:
+    """Existing ThirdPartyException instances propagate unchanged."""
+    strategy = RagflowRAGStrategy()
+    original = ThirdPartyException(
+        msg="dataset lookup failed",
+        e=CodeEnum.RAGFLOW_RAGError,
+    )
+    with (
+        patch(_GET_DATASET_NAME, return_value="ds-name"),
+        patch(_GET_DATASET_ID, new=AsyncMock(side_effect=original)),
+    ):
+        with pytest.raises(ThirdPartyException) as exc_info:
+            await strategy.query_doc("doc-x")
+    assert exc_info.value is original
+
+
+@pytest.mark.asyncio
 async def test_query_doc_returns_empty_list_when_document_has_no_chunks() -> None:
     """A document with zero chunks returns ``[]`` without raising."""
     strategy = RagflowRAGStrategy()
@@ -223,6 +241,24 @@ async def test_query_doc_name_raises_on_transport_exception() -> None:
         with pytest.raises(ThirdPartyException) as exc_info:
             await strategy.query_doc_name("doc-x")
     assert "doc-x" in str(exc_info.value) or "connection reset" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_query_doc_name_preserves_third_party_exception() -> None:
+    """Existing ThirdPartyException instances propagate unchanged."""
+    strategy = RagflowRAGStrategy()
+    original = ThirdPartyException(
+        msg="document info failed",
+        e=CodeEnum.RAGFLOW_RAGError,
+    )
+    with (
+        patch(_GET_DATASET_NAME, return_value="ds-name"),
+        patch(_GET_DATASET_ID, new=AsyncMock(return_value="ds-1")),
+        patch(_GET_DOC_INFO, new=AsyncMock(side_effect=original)),
+    ):
+        with pytest.raises(ThirdPartyException) as exc_info:
+            await strategy.query_doc_name("doc-x")
+    assert exc_info.value is original
 
 
 @pytest.mark.asyncio

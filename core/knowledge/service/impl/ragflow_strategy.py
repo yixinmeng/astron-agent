@@ -973,6 +973,8 @@ class RagflowRAGStrategy(RAGStrategy):
 
         except CustomException:
             raise
+        except ThirdPartyException:
+            raise
         except Exception as e:
             logger.error(f"Failed to query document chunk information: {e}")
             raise ThirdPartyException(
@@ -1022,6 +1024,8 @@ class RagflowRAGStrategy(RAGStrategy):
             return file_info
 
         except CustomException:
+            raise
+        except ThirdPartyException:
             raise
         except Exception as e:
             logger.error(f"Failed to query document information: {e}")
