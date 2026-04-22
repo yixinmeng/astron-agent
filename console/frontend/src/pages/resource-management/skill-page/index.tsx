@@ -62,6 +62,7 @@ function SkillPage(): React.ReactElement {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<SkillTreeNode | null>(null);
+  const [dialogParentId, setDialogParentId] = useState<number | null>(null);
   const [currentFile, setCurrentFile] = useState<SkillFileContent | null>(null);
   const [editorValue, setEditorValue] = useState('');
   const [mode, setMode] = useState<'edit' | 'preview'>('edit');
@@ -187,6 +188,7 @@ function SkillPage(): React.ReactElement {
     };
     const handleCreate = (): void => {
       form.resetFields();
+      setDialogParentId(0);
       setDialogMode('folder');
     };
     window.addEventListener('headerSearch', handleSearch);
@@ -304,31 +306,34 @@ function SkillPage(): React.ReactElement {
     setSubmitting(true);
     try {
       const values = await form.validateFields();
-      const parentId =
-        selectedNode?.entryType === 'folder'
+      const resolvedParentId =
+        dialogParentId ??
+        (selectedNode?.entryType === 'folder'
           ? selectedNode.id
-          : selectedNode?.parentId || 0;
+          : selectedNode?.parentId || 0);
 
       if (dialogMode === 'folder') {
         const createdFolder = await createSkillFolder({
-          parentId,
+          parentId: resolvedParentId,
           name: values.name,
         });
         setDialogMode(null);
+        setDialogParentId(null);
         form.resetFields();
         setTreeData(prev => insertTreeNode(prev, createdFolder));
         setExpandedKeys(prev =>
-          mergeExpandedKeys(prev, [parentId, createdFolder.id])
+          mergeExpandedKeys(prev, [resolvedParentId, createdFolder.id])
         );
         message.success('文件夹已创建');
         await refreshTree(keywordRef.current);
       } else if (dialogMode === 'file') {
         const created = await createSkillFile({
-          parentId,
+          parentId: resolvedParentId,
           name: values.name,
           content: values.content || '',
         });
         setDialogMode(null);
+        setDialogParentId(null);
         form.resetFields();
         message.success('文件已创建');
         setSelectedId(created.id);
@@ -337,10 +342,9 @@ function SkillPage(): React.ReactElement {
         setMode(created.fileExt === 'md' ? 'preview' : 'edit');
         setDirty(false);
         setTreeData(prev =>
-          insertTreeNode(prev, toTreeNode(created, parentId, true))
+          insertTreeNode(prev, toTreeNode(created, resolvedParentId, true))
         );
-        setExpandedKeys(prev => mergeExpandedKeys(prev, [parentId]));
-        scheduleRevalidate(keywordRef.current, created.id);
+        setExpandedKeys(prev => mergeExpandedKeys(prev, [resolvedParentId]));
       } else if (dialogMode === 'rename' && selectedNode) {
         const renamed = await renameSkillEntry({
           id: selectedNode.id,
@@ -366,6 +370,7 @@ function SkillPage(): React.ReactElement {
         await refreshTree(keywordRef.current, selectedNode.id);
       }
     } finally {
+      setDialogParentId(null);
       submittingRef.current = false;
       setSubmitting(false);
     }
@@ -408,6 +413,7 @@ function SkillPage(): React.ReactElement {
       return;
     }
     form.setFieldsValue({ name: selectedNode.name });
+    setDialogParentId(null);
     setDialogMode('rename');
   };
 
@@ -493,6 +499,16 @@ function SkillPage(): React.ReactElement {
       submittingRef.current = false;
       setSubmitting(false);
     }
+  };
+
+  const clearSelection = async (): Promise<void> => {
+    if (!(await ensureDiscardChanges())) {
+      return;
+    }
+    setSelectedId(null);
+    setCurrentFile(null);
+    setEditorValue('');
+    setDirty(false);
   };
 
   const renderEmpty = (): React.ReactElement => (
@@ -685,6 +701,7 @@ function SkillPage(): React.ReactElement {
                 icon={<PlusOutlined />}
                 onClick={() => {
                   form.resetFields();
+                  setDialogParentId(0);
                   setDialogMode('folder');
                 }}
               >
@@ -705,7 +722,14 @@ function SkillPage(): React.ReactElement {
               </Typography.Text>
             ) : null}
           </div>
-          <div className={styles.treeWrap}>
+          <div
+            className={styles.treeWrap}
+            onClick={event => {
+              if (event.target === event.currentTarget) {
+                void clearSelection();
+              }
+            }}
+          >
             <Tree
               blockNode
               draggable
@@ -767,6 +791,7 @@ function SkillPage(): React.ReactElement {
         cancelText="取消"
         confirmLoading={submitting}
         onCancel={() => {
+          setDialogParentId(null);
           setDialogMode(null);
           form.resetFields();
         }}
