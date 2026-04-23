@@ -418,17 +418,24 @@ async def chunk_query(
         span_context.add_info_events(
             {"usr_input": json.dumps(request_dict, ensure_ascii=False)}
         )
+        span_context.add_info_events({"rewrite_enabled": str(query_request.rewrite)})
+
         strategy = RAGStrategyFactory.get_strategy(query_request.ragType)
 
-        new_query = await rewrite_query(
-            query_request.query, history=query_request.history, span=span_context
+        # rewrite=False sends the raw query (for keyword/highlight matching).
+        effective_query = (
+            await rewrite_query(
+                query_request.query, history=query_request.history, span=span_context
+            )
+            if query_request.rewrite
+            else query_request.query
         )
 
         return await handle_rag_operation(
             span_context=span_context,
             metric=metric,
             operation_callable=strategy.query,
-            query=new_query,
+            query=effective_query,
             doc_ids=query_request.match.docIds,
             repo_ids=query_request.match.repoId,
             top_k=query_request.topN,
