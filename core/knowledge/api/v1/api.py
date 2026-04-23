@@ -6,7 +6,7 @@ including document splitting, knowledge chunk saving, updating, deleting, queryi
 """
 
 import json
-from typing import Any, Callable, List, Optional, Tuple, Union, cast
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 
 from common.otlp.metrics.meter import Meter
 from common.otlp.trace.span import Span
@@ -431,6 +431,12 @@ async def chunk_query(
             else query_request.query
         )
 
+        # Only forward ragflow_ext when set, so other strategies' kwargs
+        # stay unchanged.
+        extra_kwargs: Dict[str, Any] = {}
+        if query_request.ragflow_ext is not None:
+            extra_kwargs["ragflow_ext"] = query_request.ragflow_ext
+
         return await handle_rag_operation(
             span_context=span_context,
             metric=metric,
@@ -441,6 +447,7 @@ async def chunk_query(
             top_k=query_request.topN,
             threshold=query_request.match.threshold,
             flow_id=query_request.match.flowId,
+            **extra_kwargs,
         )
 
 

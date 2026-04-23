@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Tests for POST /knowledge/v1/chunk/query rewrite behavior.
+"""Tests for POST /knowledge/v1/chunk/query API-layer behavior.
 
 Covers:
 - rewrite switch: default True runs rewrite_query; False skips it.
+- ragflow_ext is forwarded to the strategy only when explicitly set.
+- Cross-field validation returns the project's error response shape
+  (HTTP 200 + application code, not stock HTTP 422).
 """
 
 from contextlib import contextmanager
@@ -139,3 +142,70 @@ async def test_rewrite_false_skips_rewrite_query(
     strategy_mock.query.assert_awaited_once()
     # Raw query forwarded unchanged
     assert strategy_mock.query.await_args.kwargs["query"] == body["query"]
+
+
+@pytest.mark.asyncio
+async def test_ragflow_ext_forwarded_when_set(
+    app: Any, infra_mocks: Tuple[MagicMock, MagicMock]
+) -> None:
+    """ragflow_ext reaches strategy.query() via kwargs when provided."""
+    from fastapi.testclient import TestClient
+
+    strategy_mock = _make_strategy_mock()
+    with (
+        patch(_GET_SPAN_AND_METRIC, return_value=infra_mocks),
+        patch(_REWRITE_QUERY, new=AsyncMock(return_value="rewritten-query")),
+        patch(_GET_STRATEGY, return_value=strategy_mock),
+    ):
+        client = TestClient(app)
+        body = _base_request_body()
+        body["ragflow_ext"] = {"top_k": 50, "highlight": True}
+        response = client.post("/knowledge/v1/chunk/query", json=body)
+
+    assert response.status_code == 200
+    ext_arg = strategy_mock.query.await_args.kwargs.get("ragflow_ext")
+    assert ext_arg is not None
+    assert ext_arg.top_k == 50
+    assert ext_arg.highlight is True
+
+
+@pytest.mark.asyncio
+async def test_ragflow_ext_not_in_kwargs_when_unset(
+    app: Any, infra_mocks: Tuple[MagicMock, MagicMock]
+) -> None:
+    """Default request does NOT add ragflow_ext=None to strategy kwargs."""
+    from fastapi.testclient import TestClient
+
+    strategy_mock = _make_strategy_mock()
+    with (
+        patch(_GET_SPAN_AND_METRIC, return_value=infra_mocks),
+        patch(_REWRITE_QUERY, new=AsyncMock(return_value="rewritten-query")),
+        patch(_GET_STRATEGY, return_value=strategy_mock),
+    ):
+        client = TestClient(app)
+        response = client.post("/knowledge/v1/chunk/query", json=_base_request_body())
+
+    assert response.status_code == 200
+    assert "ragflow_ext" not in strategy_mock.query.await_args.kwargs
+
+
+@pytest.mark.asyncio
+async def test_validation_error_when_ragflow_ext_with_non_ragflow_ragtype(
+    app: Any,
+) -> None:
+    """DTO validator rejects ragflow_ext + AIUI.
+
+    Service uses a custom RequestValidationError handler (main.py:45-63)
+    that returns HTTP 200 with an application-level error body
+    (code=10003 = ParameterInvalid) instead of stock HTTP 422.
+    """
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)
+    body = _base_request_body()
+    body["ragType"] = "AIUI-RAG2"
+    body["ragflow_ext"] = {"top_k": 50}
+    response = client.post("/knowledge/v1/chunk/query", json=body)
+
+    assert response.status_code == 200
+    assert "ragflow_ext is only allowed when ragType='Ragflow-RAG'" in response.text
