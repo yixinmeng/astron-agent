@@ -469,12 +469,12 @@ async def upload_document_to_dataset(
     - When ``dataset_id`` is non-empty, resolve the dataset via SDK id lookup
       and upload to it. If the SDK returns no matching dataset, raise
       ``ValueError`` instead of redirecting to the env default group.
-    - When ``dataset_id`` is empty, fall back to the legacy
-      ``RAGFLOW_DEFAULT_GROUP``-based lookup to preserve single-dataset
-      behavior for callers that don't yet pass explicit ids.
+    - When ``dataset_id`` is empty, use the configured
+      ``RAGFLOW_DEFAULT_GROUP`` lookup. Missing or empty default groups fail
+      before any dataset lookup.
 
     Args:
-        dataset_id: Dataset ID; empty string triggers legacy default-group path.
+        dataset_id: Dataset ID; empty string triggers configured fallback.
         file_content: File content bytes.
         filename: File name.
 
@@ -483,11 +483,10 @@ async def upload_document_to_dataset(
 
     Raises:
         ValueError: If ``dataset_id`` is provided but not resolvable via SDK,
-            or if the legacy path cannot find the configured default group.
+            or if the configured fallback cannot resolve a dataset.
     """
-    rag = get_rag_object()
-
     if dataset_id:
+        rag = get_rag_object()
         sdk_datasets: List[Any] = rag.list_datasets(id=dataset_id)
         if not sdk_datasets:
             raise ValueError(
@@ -523,15 +522,14 @@ async def _resolve_dataset_via_rest(group_name: str, rag: Any) -> Any:
 
 
 async def _upload_via_default_group(file_content: bytes, filename: str) -> List[Any]:
-    """Legacy upload path: resolve dataset via ``RAGFLOW_DEFAULT_GROUP`` env.
+    """Legacy upload path using configured ``RAGFLOW_DEFAULT_GROUP``.
 
     Kept separate to avoid increasing ``upload_document_to_dataset`` complexity.
     """
     group_name = os.getenv("RAGFLOW_DEFAULT_GROUP", "")
     if not group_name:
         raise ValueError(
-            "RAGFLOW_DEFAULT_GROUP is not set; cannot upload via legacy "
-            "default-group path — refusing to route to an arbitrary dataset"
+            "RAGFLOW_DEFAULT_GROUP is not set; cannot upload without dataset_id"
         )
     rag = get_rag_object()
 

@@ -105,7 +105,7 @@ async def test_upload_uses_env_default_group_when_dataset_id_empty() -> None:
 
 @pytest.mark.asyncio
 async def test_upload_raises_when_dataset_id_empty_and_env_group_missing() -> None:
-    """dataset_id='' with a missing env group raises ValueError."""
+    """Configured env group absent from RAGFlow raises ValueError."""
     mock_rag = MagicMock()
     mock_rag.list_datasets = MagicMock(return_value=[])
 
@@ -145,26 +145,27 @@ async def test_upload_payload_contains_displayed_name_and_blob() -> None:
     )
 
 
+@pytest.mark.parametrize("env_value", [None, ""])
 @pytest.mark.asyncio
-async def test_upload_raises_when_dataset_id_empty_and_env_group_unset() -> None:
-    """dataset_id='' + RAGFLOW_DEFAULT_GROUP unset → ValueError.
-
-    Guards the legacy path against routing to an arbitrary dataset when the
-    env variable is missing or empty: an empty ``name=`` SDK lookup could
-    otherwise return all datasets and pick any first one (same family of
-    cross-repo contamination as the RF-22 bug on the explicit-id path).
-    """
+async def test_upload_raises_when_dataset_id_empty_and_default_group_unconfigured(
+    monkeypatch: pytest.MonkeyPatch, env_value: str | None
+) -> None:
+    """Empty default group fails before SDK dataset lookup."""
     mock_rag = MagicMock()
+    if env_value is None:
+        monkeypatch.delenv("RAGFLOW_DEFAULT_GROUP", raising=False)
+    else:
+        monkeypatch.setenv("RAGFLOW_DEFAULT_GROUP", env_value)
 
     with patch.object(
         ragflow_client, "get_rag_object", return_value=mock_rag
-    ), patch.dict("os.environ", {"RAGFLOW_DEFAULT_GROUP": ""}, clear=False):
+    ) as get_rag_object_mock:
         with pytest.raises(ValueError, match="RAGFLOW_DEFAULT_GROUP is not set"):
             await ragflow_client.upload_document_to_dataset(
                 dataset_id="",
-                file_content=b"should not land anywhere",
-                filename="rf22_unset_env.txt",
+                file_content=b"hello",
+                filename="t.pdf",
             )
 
-    # SDK must NEVER be queried — validation kicks in before any lookup
+    get_rag_object_mock.assert_not_called()
     mock_rag.list_datasets.assert_not_called()
