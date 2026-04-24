@@ -12,6 +12,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from knowledge.consts.error_code import CodeEnum
+from knowledge.domain.entity.chunk_dto import RagflowQueryExt
 from knowledge.exceptions.exception import CustomException, ThirdPartyException
 from knowledge.infra.ragflow import ragflow_client
 from knowledge.infra.ragflow.ragflow_utils import RagflowUtils
@@ -45,15 +46,18 @@ class RagflowRAGStrategy(RAGStrategy):
             query: Query string
             doc_ids: List of specified document IDs
             repo_ids: Ignore this parameter, use default dataset name from config
-            top_k: Number of results to return
+            top_k: Default result limit; overridden by ``ragflow_ext.top_k``.
             threshold: Similarity threshold
-            **kwargs: Additional parameters
+            **kwargs: Optional ``ragflow_ext: RagflowQueryExt`` from the API
+                layer; other keys are ignored.
 
         Returns:
             Query result dictionary (abstract interface format)
         """
         try:
             logger.info("Starting RAGFlow query: query=%s, doc_ids=%s", query, doc_ids)
+
+            ext: Optional[RagflowQueryExt] = kwargs.get("ragflow_ext")
 
             # Get dataset name from configuration
             dataset_name = RagflowUtils.get_default_dataset_name()
@@ -65,18 +69,42 @@ class RagflowRAGStrategy(RAGStrategy):
 
             logger.info("Using dataset: %s (ID: %s)", dataset_name, dataset_id)
 
-            # Build RAGFlow retrieval request with correct parameter format
-            ragflow_request = {
+            # ragflow_ext.top_k overrides topN as the retrieval/result limit.
+            effective_top_k = (
+                ext.top_k if ext and ext.top_k is not None else (top_k or 6)
+            )
+
+            # Preserve the existing vector/keyword blend weight default.
+            vsw = (
+                ext.vector_similarity_weight
+                if ext and ext.vector_similarity_weight is not None
+                else 0.2
+            )
+
+            ragflow_request: Dict[str, Any] = {
                 "question": query,
                 "dataset_ids": [dataset_id],
-                "top_k": top_k or 6,
+                "top_k": effective_top_k,
                 "similarity_threshold": threshold,
-                "vector_similarity_weight": 0.2,
+                "vector_similarity_weight": vsw,
             }
 
-            # Only add document_ids parameter when document IDs are provided
             if doc_ids:
                 ragflow_request["document_ids"] = doc_ids
+
+            if ext is not None:
+                if ext.keyword is not None:
+                    ragflow_request["keyword"] = ext.keyword
+                if ext.rerank_id is not None:
+                    ragflow_request["rerank_id"] = ext.rerank_id
+                if ext.use_kg is not None:
+                    ragflow_request["use_kg"] = ext.use_kg
+                if ext.highlight is not None:
+                    # RAGFlow v0.20.5 compares `highlight` as a string;
+                    # passing a Python bool leaves it enabled. v0.24.0 accepts
+                    # bool directly — drop str() once the pinned image is >=
+                    # v0.24.0.
+                    ragflow_request["highlight"] = str(ext.highlight)
 
             # Call RAGFlow retrieval API
             ragflow_response = await ragflow_client.retrieval_with_dataset(
@@ -96,8 +124,8 @@ class RagflowRAGStrategy(RAGStrategy):
                 ragflow_response, threshold or 0
             )
 
-            if top_k and top_k > 0:
-                results = results[:top_k]
+            if effective_top_k and effective_top_k > 0:
+                results = results[:effective_top_k]
 
             logger.info("Query completed, returning %d results", len(results))
             return {"query": query, "count": len(results), "results": results}
