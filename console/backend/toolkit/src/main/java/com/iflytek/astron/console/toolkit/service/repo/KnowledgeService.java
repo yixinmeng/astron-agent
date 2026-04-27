@@ -532,10 +532,14 @@ public class KnowledgeService {
                             ? fileInfoV2.getLastUuid()
                             : null;
 
+            Repo ragflowRepo = loadRagflowRepoOrNull(fileInfoV2);
+            String coreRepoId = (ragflowRepo != null) ? ragflowRepo.getCoreRepoId() : null;
+            String repoName = (ragflowRepo != null) ? ragflowRepo.getName() : null;
+
             return knowledgeV2ServiceCallHandler.documentUpload(
                     multipartFile, sliceConfig.getLengthRange(), separator,
                     fileInfoV2.getSource(), resourceType,
-                    oldDocId);
+                    oldDocId, coreRepoId, repoName);
 
         } catch (Exception e) {
             log.error("Failed to upload file for chunking: {}", e.getMessage(), e);
@@ -555,7 +559,47 @@ public class KnowledgeService {
             request.setResourceType(1);
         }
         request.setRagType(fileInfoV2.getSource());
-        return knowledgeV2ServiceCallHandler.documentSplit(request);
+        Repo ragflowRepo = loadRagflowRepoOrNull(fileInfoV2);
+        String coreRepoId = (ragflowRepo != null) ? ragflowRepo.getCoreRepoId() : null;
+        String repoName = (ragflowRepo != null) ? ragflowRepo.getName() : null;
+        return knowledgeV2ServiceCallHandler.documentSplit(request, coreRepoId, repoName);
+    }
+
+    /**
+     * Returns the {@code coreRepoId} for Ragflow-RAG, or {@code null} for other sources.
+     *
+     * @throws IllegalStateException if Ragflow-RAG and {@code repoId} or {@code coreRepoId} is missing.
+     */
+    private String resolveCoreRepoIdForRagflow(FileInfoV2 fileInfoV2) {
+        Repo repo = loadRagflowRepoOrNull(fileInfoV2);
+        return (repo != null) ? repo.getCoreRepoId() : null;
+    }
+
+    /**
+     * Loads the {@link Repo} for a Ragflow-RAG document; returns {@code null} for other sources.
+     * Callers read both {@code coreRepoId} and {@code name} from the result with one DB query.
+     *
+     * @throws IllegalStateException if Ragflow-RAG and {@code repoId} / {@link Repo} /
+     *         {@code coreRepoId} is missing.
+     */
+    private Repo loadRagflowRepoOrNull(FileInfoV2 fileInfoV2) {
+        if (!ProjectContent.FILE_SOURCE_RAG_FLOW_RAG_STR.equals(fileInfoV2.getSource())) {
+            return null;
+        }
+        Long repoId = fileInfoV2.getRepoId();
+        if (repoId == null) {
+            throw new IllegalStateException(
+                    "Ragflow-RAG upload/split requires repoId on FileInfoV2 id="
+                            + fileInfoV2.getId());
+        }
+        Repo repo = repoService.getById(repoId);
+        if (repo == null) {
+            throw new IllegalStateException("Repo not found for repoId=" + repoId);
+        }
+        if (!StringUtils.isNotBlank(repo.getCoreRepoId())) {
+            throw new IllegalStateException("Repo " + repoId + " has no coreRepoId");
+        }
+        return repo;
     }
 
     /** When code==11111 extract inner parentheses text, keep original message otherwise. */
@@ -1434,6 +1478,10 @@ public class KnowledgeService {
                         needDelete = false;
                     }
                 }
+                String coreRepoId = resolveCoreRepoIdForRagflow(fileInfoV2);
+                if (coreRepoId != null) {
+                    request.setGroup(coreRepoId);
+                }
                 if (needDelete) {
                     KnowledgeResponse response = knowledgeV2ServiceCallHandler.deleteDocOrChunk(request);
                     if (response.getCode() != 0) {
@@ -1462,6 +1510,10 @@ public class KnowledgeService {
                 throw new BusinessException(ResponseEnum.REPO_FILE_NOT_EXIST);
             }
             request.setRagType(fileInfoV2.getSource());
+            String coreRepoId = resolveCoreRepoIdForRagflow(fileInfoV2);
+            if (coreRepoId != null) {
+                request.setGroup(coreRepoId);
+            }
             KnowledgeResponse response = knowledgeV2ServiceCallHandler.deleteDocOrChunk(request);
             if (response.getCode() != 0) {
                 log.error("Failed to delete knowledge chunk, message:{}", response.getMessage());
