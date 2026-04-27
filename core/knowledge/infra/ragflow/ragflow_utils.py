@@ -48,9 +48,14 @@ class RagflowUtils:
     async def get_dataset_id_by_name(dataset_name: str) -> Optional[str]:
         """Look up a dataset ID by name.
 
-        Returns ``None`` only when RAGFlow successfully returns no matching
-        dataset (``code == 0`` with empty data). Raises
-        ``ThirdPartyException`` for non-zero RAGFlow codes; transport
+        Returns ``None`` for not-found cases:
+        * ``code == 0`` with empty / non-matching data
+        * ``code == 108`` with a "lacks permission" message — RAGFlow
+          collapses "dataset does not exist" and "no access" into the same
+          response, so callers cannot distinguish them. Treating this as
+          not-found preserves fail-closed semantics for query routing.
+
+        Other non-zero codes raise ``ThirdPartyException``; transport
         exceptions propagate.
         """
         from knowledge.infra.ragflow import ragflow_client
@@ -64,6 +69,14 @@ class RagflowUtils:
                     return dataset.get("id")
             return None
         msg = datasets_response.get("message", "Unknown error")
+        if code == 108 and "lacks permission" in msg.lower():
+            logger.info(
+                "Dataset %r not found on RAGFlow (code=108: %s); "
+                "treating as not-found",
+                dataset_name,
+                msg,
+            )
+            return None
         raise ThirdPartyException(
             msg=f"RAGFlow list_datasets name={dataset_name}: code={code} message={msg}",
             e=CodeEnum.RAGFLOW_RAGError,

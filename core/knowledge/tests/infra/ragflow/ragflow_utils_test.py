@@ -84,13 +84,38 @@ class TestGetDatasetIdByName:
     @pytest.mark.asyncio
     async def test_raises_on_non_zero_code(self) -> None:
         """Non-zero code (auth / argument / operating error) => ThirdPartyException.
-        RAGFlow's ``/datasets`` endpoint returns ``code=0, data=[]`` for
-        genuine no-match, so any non-zero code is a real protocol failure."""
+        Genuine protocol failures still surface; only the not-found shapes
+        below are folded into ``None``."""
         resp = {"code": 109, "message": "Authentication failed"}
         with patch(_LIST_DATASETS, new=AsyncMock(return_value=resp)):
             with pytest.raises(ThirdPartyException) as exc_info:
                 await RagflowUtils.get_dataset_id_by_name("AnyKB")
         assert "Authentication failed" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_returns_none_on_code_108_lacks_permission(self) -> None:
+        """code=108 with 'lacks permission' message => not-found => ``None``.
+
+        RAGFlow returns this shape for both nonexistent and inaccessible
+        datasets; callers cannot tell them apart, so the safe fail-closed
+        behavior is to treat it as not-found rather than raising.
+        """
+        resp = {
+            "code": 108,
+            "message": "User 'u-1' lacks permission for dataset 'MissingKB'",
+        }
+        with patch(_LIST_DATASETS, new=AsyncMock(return_value=resp)):
+            result = await RagflowUtils.get_dataset_id_by_name("MissingKB")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_raises_on_code_108_unrelated_message(self) -> None:
+        """code=108 without 'lacks permission' marker still raises so we don't
+        silently swallow other 108-class errors."""
+        resp = {"code": 108, "message": "Some other 108 error"}
+        with patch(_LIST_DATASETS, new=AsyncMock(return_value=resp)):
+            with pytest.raises(ThirdPartyException):
+                await RagflowUtils.get_dataset_id_by_name("AnyKB")
 
 
 # ---------------------------------------------------------------------------
