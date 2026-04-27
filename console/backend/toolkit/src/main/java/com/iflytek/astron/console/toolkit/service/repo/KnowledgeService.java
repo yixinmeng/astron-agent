@@ -575,6 +575,20 @@ public class KnowledgeService {
         return (repo != null) ? repo.getCoreRepoId() : null;
     }
 
+    private boolean applyRagflowGroupForDelete(KnowledgeRequest request, FileInfoV2 fileInfoV2) {
+        try {
+            String coreRepoId = resolveCoreRepoIdForRagflow(fileInfoV2);
+            if (coreRepoId != null) {
+                request.setGroup(coreRepoId);
+            }
+            return true;
+        } catch (IllegalStateException e) {
+            log.warn("Skip Ragflow-RAG delete because repo metadata is invalid. fileId={}, uuid={}, reason={}",
+                    fileInfoV2.getId(), fileInfoV2.getUuid(), e.getMessage());
+            return false;
+        }
+    }
+
     /**
      * Loads the {@link Repo} for a Ragflow-RAG document; returns {@code null} for other sources.
      * Callers read both {@code coreRepoId} and {@code name} from the result with one DB query.
@@ -1478,9 +1492,8 @@ public class KnowledgeService {
                         needDelete = false;
                     }
                 }
-                String coreRepoId = resolveCoreRepoIdForRagflow(fileInfoV2);
-                if (coreRepoId != null) {
-                    request.setGroup(coreRepoId);
+                if (!applyRagflowGroupForDelete(request, fileInfoV2)) {
+                    continue;
                 }
                 if (needDelete) {
                     KnowledgeResponse response = knowledgeV2ServiceCallHandler.deleteDocOrChunk(request);
@@ -1510,9 +1523,8 @@ public class KnowledgeService {
                 throw new BusinessException(ResponseEnum.REPO_FILE_NOT_EXIST);
             }
             request.setRagType(fileInfoV2.getSource());
-            String coreRepoId = resolveCoreRepoIdForRagflow(fileInfoV2);
-            if (coreRepoId != null) {
-                request.setGroup(coreRepoId);
+            if (!applyRagflowGroupForDelete(request, fileInfoV2)) {
+                return;
             }
             KnowledgeResponse response = knowledgeV2ServiceCallHandler.deleteDocOrChunk(request);
             if (response.getCode() != 0) {

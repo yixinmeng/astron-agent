@@ -2408,6 +2408,46 @@ class KnowledgeServiceTest {
         }
 
         @Test
+        @DisplayName("deleteKnowledgeDoc skips invalid Ragflow-RAG metadata and continues")
+        void deleteKnowledgeDoc_RagflowRAG_invalidMetadata_skipsAndContinues() {
+            JSONArray deleteDocIds = new JSONArray();
+            deleteDocIds.add("doc-rf-invalid");
+            deleteDocIds.add("doc-rf-valid");
+
+            FileInfoV2 invalidFile = new FileInfoV2();
+            invalidFile.setSource("Ragflow-RAG");
+            invalidFile.setRepoId(404L);
+            invalidFile.setId(1L);
+            invalidFile.setUuid("doc-rf-invalid");
+
+            FileInfoV2 validFile = new FileInfoV2();
+            validFile.setSource("Ragflow-RAG");
+            validFile.setRepoId(100L);
+            validFile.setId(2L);
+            validFile.setUuid("doc-rf-valid");
+            when(fileInfoV2Service.getOnly(any(QueryWrapper.class))).thenReturn(invalidFile, validFile);
+
+            Repo rfRepo = new Repo();
+            rfRepo.setId(100L);
+            rfRepo.setCoreRepoId("rf-core-uuid");
+            when(repoService.getById(anyLong())).thenAnswer(invocation -> {
+                Long repoId = invocation.getArgument(0);
+                return Long.valueOf(100L).equals(repoId) ? rfRepo : null;
+            });
+
+            KnowledgeResponse response = new KnowledgeResponse();
+            response.setCode(0);
+            when(knowledgeV2ServiceCallHandler.deleteDocOrChunk(any())).thenReturn(response);
+
+            knowledgeService.deleteKnowledgeDoc(deleteDocIds, null);
+
+            ArgumentCaptor<KnowledgeRequest> captor = ArgumentCaptor.forClass(KnowledgeRequest.class);
+            verify(knowledgeV2ServiceCallHandler).deleteDocOrChunk(captor.capture());
+            assertThat(captor.getValue().getDocId()).isEqualTo("doc-rf-valid");
+            assertThat(captor.getValue().getGroup()).isEqualTo("rf-core-uuid");
+        }
+
+        @Test
         @DisplayName("deleteKnowledgeChunks sets group on Ragflow-RAG request")
         void deleteKnowledgeChunks_RagflowRAG_setsGroupOnRequest() {
             String docId = "doc-rf-001";
@@ -2458,6 +2498,25 @@ class KnowledgeServiceTest {
             verify(knowledgeV2ServiceCallHandler).deleteDocOrChunk(captor.capture());
             assertThat(captor.getValue().getGroup()).isNull();
             verify(repoService, never()).getById(anyLong());
+        }
+
+        @Test
+        @DisplayName("deleteKnowledgeChunks skips invalid Ragflow-RAG metadata")
+        void deleteKnowledgeChunks_RagflowRAG_invalidMetadata_skipsDelete() {
+            String docId = "doc-rf-invalid";
+            JSONArray chunkIds = new JSONArray();
+            chunkIds.add("chunk-001");
+
+            FileInfoV2 invalidFile = new FileInfoV2();
+            invalidFile.setSource("Ragflow-RAG");
+            invalidFile.setRepoId(404L);
+            invalidFile.setId(1L);
+            invalidFile.setUuid(docId);
+            when(fileInfoV2Service.getOnly(any(QueryWrapper.class))).thenReturn(invalidFile);
+
+            knowledgeService.deleteKnowledgeChunks(docId, chunkIds);
+
+            verify(knowledgeV2ServiceCallHandler, never()).deleteDocOrChunk(any());
         }
     }
 }
