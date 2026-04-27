@@ -323,7 +323,12 @@ class RagflowRAGStrategy(RAGStrategy):
                 }
             ]
         """
+        # ``group`` falls back to the default dataset (legacy callers may omit it);
+        # ``group_description`` deliberately has no fallback — when the upstream
+        # caller does not supply a human-readable label, ensure_dataset uses its
+        # own "Automatically created dataset: {group}" placeholder on first create.
         group = kwargs.get("group") or RagflowUtils.get_default_dataset_name()
+        group_description = kwargs.get("groupDescription")
         file = kwargs.get("file")
 
         # Parameter validation
@@ -347,7 +352,9 @@ class RagflowRAGStrategy(RAGStrategy):
 
         try:
             # Step 1: Dataset management
-            dataset_id = await RagflowUtils.ensure_dataset(group)
+            dataset_id = await RagflowUtils.ensure_dataset(
+                group, description=group_description
+            )
             logger.info("Using dataset: %s, name: %s", dataset_id, group)
 
             if document_id:
@@ -391,16 +398,23 @@ class RagflowRAGStrategy(RAGStrategy):
             "copiedFrom": None,
         }
 
-    async def _validate_chunks_save_config(self, doc_id: str) -> str:
-        """Validate chunks_save configuration and dataset"""
-        default_group = RagflowUtils.get_default_dataset_name()
+    async def _validate_chunks_save_config(
+        self,
+        doc_id: str,
+        group: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> str:
+        """Resolve dataset for chunks_save; lazy-creates if missing."""
+        group_name = group or RagflowUtils.get_default_dataset_name()
 
-        dataset_id = await RagflowUtils.ensure_dataset(default_group)
+        dataset_id = await RagflowUtils.ensure_dataset(
+            group_name, description=description
+        )
         if not dataset_id:
-            logger.error(f"Unable to find or create dataset: {default_group}")
+            logger.error(f"Unable to find or create dataset: {group_name}")
             raise CustomException(
                 CodeEnum.ChunkSaveFailed,
-                f"Unable to find or create dataset: {default_group}",
+                f"Unable to find or create dataset: {group_name}",
             )
 
         return dataset_id
@@ -708,17 +722,15 @@ class RagflowRAGStrategy(RAGStrategy):
         )
 
         try:
-            # 1. Validate configuration and dataset
-            dataset_id = await self._validate_chunks_save_config(docId)
+            dataset_id = await self._validate_chunks_save_config(
+                docId, group, description=kwargs.get("groupDescription")
+            )
             logger.info(f"Using dataset: {dataset_id}")
 
-            # 2. Validate if document exists
             await self._validate_document_exists(dataset_id, docId)
 
-            # 3. Get existing chunks
             existing_chunks = await self._get_existing_chunks(dataset_id, docId)
 
-            # 4. Process each chunk
             current_time = time.strftime("%Y-%m-%d %H:%M:%S")
             chunks_typed = [
                 chunk if isinstance(chunk, dict) else chunk.__dict__ for chunk in chunks
@@ -738,17 +750,19 @@ class RagflowRAGStrategy(RAGStrategy):
             logger.error(f"Chunk save operation failed: {e}")
             raise CustomException(CodeEnum.ChunkSaveFailed, str(e))
 
-    async def _validate_chunks_update_config(self) -> str:
-        """Validate chunks_update configuration and dataset"""
-        default_group = RagflowUtils.get_default_dataset_name()
+    async def _validate_chunks_update_config(self, group: Optional[str] = None) -> str:
+        """Resolve dataset for chunks_update; never lazy-creates.
 
-        dataset_id = await RagflowUtils.ensure_dataset(default_group)
+        Update against a non-existent dataset is a logic error and surfaces
+        as ``ChunkUpdateFailed``.
+        """
+        group_name = group or RagflowUtils.get_default_dataset_name()
+
+        dataset_id = await RagflowUtils.get_dataset_id_by_name(group_name)
         if not dataset_id:
-            logger.error(f"Unable to find or create dataset: {default_group}")
-            raise CustomException(
-                CodeEnum.ChunkUpdateFailed,
-                f"Unable to find or create dataset: {default_group}",
-            )
+            err = f"Dataset {group_name!r} not found in RAGFlow, cannot update chunk"
+            logger.error(err)
+            raise CustomException(CodeEnum.ChunkUpdateFailed, err)
 
         return dataset_id
 
@@ -877,11 +891,9 @@ class RagflowRAGStrategy(RAGStrategy):
         )
 
         try:
-            # 1. Validate configuration and dataset
-            dataset_id = await self._validate_chunks_update_config()
+            dataset_id = await self._validate_chunks_update_config(group)
             logger.info(f"Using dataset: {dataset_id}")
 
-            # 2. Process each chunk update
             failed_chunks: Dict[str, str] = {}
             successful_count = 0
 
@@ -909,7 +921,11 @@ class RagflowRAGStrategy(RAGStrategy):
             raise CustomException(CodeEnum.ChunkUpdateFailed, str(e))
 
     async def chunks_delete(
-        self, docId: str, chunkIds: List[str], **kwargs: Any
+        self,
+        docId: str,
+        chunkIds: List[str],
+        group: Optional[str] = None,
+        **kwargs: Any,
     ) -> None:
         """
         Delete knowledge chunks using RAGFlow.
@@ -917,6 +933,10 @@ class RagflowRAGStrategy(RAGStrategy):
         Args:
             docId: Document ID
             chunkIds: List of chunk IDs to delete
+            group: Optional RAGFlow dataset name. ``None`` falls back to the
+                configured default group. Resolution does NOT lazy-create —
+                if the dataset does not exist the delete is a no-op
+                (idempotent).
             **kwargs: Additional parameters
 
         Returns:
@@ -933,22 +953,21 @@ class RagflowRAGStrategy(RAGStrategy):
             )
 
         logger.info(
-            f"Processing chunk deletion request: docId={docId}, chunks_count={len(chunkIds)}"
+            f"Processing chunk deletion request: docId={docId}, "
+            f"group={group}, chunks_count={len(chunkIds)}"
         )
 
         try:
-            # 1. Get dataset name from config, then find dataset ID
-            default_group = RagflowUtils.get_default_dataset_name()
-
-            dataset_id = await RagflowUtils.ensure_dataset(default_group)
-            if not dataset_id:
-                logger.error(f"Unable to find or create dataset: {default_group}")
-                raise CustomException(
-                    CodeEnum.ChunkDeleteFailed,
-                    f"Unable to find or create dataset: {default_group}",
+            group_name = group or RagflowUtils.get_default_dataset_name()
+            dataset_id = await RagflowUtils.get_dataset_id_by_name(group_name)
+            if dataset_id is None:
+                logger.info(
+                    f"Dataset {group_name!r} not found in RAGFlow, "
+                    f"treating delete as no-op (idempotent)"
                 )
+                return None
 
-            logger.info(f"Using dataset: {default_group} (ID: {dataset_id})")
+            logger.info(f"Using dataset: {group_name} (ID: {dataset_id})")
 
             # 2. Call RAGFlow deletion API directly
             delete_response = await ragflow_client.delete_chunks(
