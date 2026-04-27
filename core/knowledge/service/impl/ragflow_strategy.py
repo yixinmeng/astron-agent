@@ -6,10 +6,11 @@ RAGFlow Strategy Implementation Module
 Provides document processing and knowledge management strategy based on RAGFlow
 """
 
+import asyncio
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from knowledge.consts.error_code import CodeEnum
 from knowledge.domain.entity.chunk_dto import RagflowQueryExt
@@ -39,96 +40,43 @@ class RagflowRAGStrategy(RAGStrategy):
         threshold: Optional[float] = 0,
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        """
-        Execute query using RAGFlow and return results.
-
-        Args:
-            query: Query string
-            doc_ids: List of specified document IDs
-            repo_ids: Ignore this parameter, use default dataset name from config
-            top_k: Default result limit; overridden by ``ragflow_ext.top_k``.
-            threshold: Similarity threshold
-            **kwargs: Optional ``ragflow_ext: RagflowQueryExt`` from the API
-                layer; other keys are ignored.
-
-        Returns:
-            Query result dictionary (abstract interface format)
-        """
+        """Query RAGFlow with repo-aware dataset routing."""
         try:
-            logger.info("Starting RAGFlow query: query=%s, doc_ids=%s", query, doc_ids)
-
+            logger.info(
+                "Starting RAGFlow query: query=%s, doc_ids=%s, repo_ids=%s",
+                query,
+                doc_ids,
+                repo_ids,
+            )
             ext: Optional[RagflowQueryExt] = kwargs.get("ragflow_ext")
 
-            # Get dataset name from configuration
-            dataset_name = RagflowUtils.get_default_dataset_name()
-            dataset_id = await RagflowUtils.get_dataset_id_by_name(dataset_name)
+            dataset_ids, missing = await self._resolve_query_datasets(repo_ids)
+            if missing:
+                logger.warning(
+                    "RAGFlow datasets missing for repos: %s "
+                    "(fail-closed: skipping these repos)",
+                    missing,
+                )
+            if not dataset_ids:
+                return self._empty_query_result(query)
 
-            if not dataset_id:
-                logger.warning("Dataset not found: %s", dataset_name)
-                return {"query": query, "count": 0, "results": []}
-
-            logger.info("Using dataset: %s (ID: %s)", dataset_name, dataset_id)
-
-            # ragflow_ext.top_k overrides topN as the retrieval/result limit.
             effective_top_k = (
                 ext.top_k if ext and ext.top_k is not None else (top_k or 6)
             )
-
-            # Preserve the existing vector/keyword blend weight default.
-            vsw = (
-                ext.vector_similarity_weight
-                if ext and ext.vector_similarity_weight is not None
-                else 0.2
+            payload = self._build_retrieval_payload(
+                query=query,
+                dataset_ids=dataset_ids,
+                doc_ids=doc_ids,
+                top_k=effective_top_k,
+                threshold=threshold or 0,
+                ext=ext,
             )
-
-            ragflow_request: Dict[str, Any] = {
-                "question": query,
-                "dataset_ids": [dataset_id],
-                "top_k": effective_top_k,
-                "similarity_threshold": threshold,
-                "vector_similarity_weight": vsw,
-            }
-
-            if doc_ids:
-                ragflow_request["document_ids"] = doc_ids
-
-            if ext is not None:
-                if ext.keyword is not None:
-                    ragflow_request["keyword"] = ext.keyword
-                if ext.rerank_id is not None:
-                    ragflow_request["rerank_id"] = ext.rerank_id
-                if ext.use_kg is not None:
-                    ragflow_request["use_kg"] = ext.use_kg
-                if ext.highlight is not None:
-                    # RAGFlow v0.20.5 compares `highlight` as a string;
-                    # passing a Python bool leaves it enabled. v0.24.0 accepts
-                    # bool directly — drop str() once the pinned image is >=
-                    # v0.24.0.
-                    ragflow_request["highlight"] = str(ext.highlight)
-
-            # Call RAGFlow retrieval API
-            ragflow_response = await ragflow_client.retrieval_with_dataset(
-                dataset_id=dataset_id, request_data=ragflow_request
+            return await self._execute_retrieval(
+                payload=payload,
+                query=query,
+                threshold=threshold or 0,
+                effective_top_k=effective_top_k,
             )
-
-            if ragflow_response.get("code") != 0:
-                msg = ragflow_response.get("message", "Unknown error")
-                logger.error("RAGFlow query failed: %s", ragflow_response)
-                raise ThirdPartyException(
-                    msg=f"RAGFlow retrieval failed: {msg}",
-                    e=CodeEnum.RAGFLOW_RAGError,
-                )
-
-            # Parse response and convert format
-            results = RagflowUtils.convert_ragflow_query_response(
-                ragflow_response, threshold or 0
-            )
-
-            if effective_top_k and effective_top_k > 0:
-                results = results[:effective_top_k]
-
-            logger.info("Query completed, returning %d results", len(results))
-            return {"query": query, "count": len(results), "results": results}
 
         except CustomException:
             raise
@@ -140,6 +88,107 @@ class RagflowRAGStrategy(RAGStrategy):
                 msg=f"RAGFlow retrieval failed: {e}",
                 e=CodeEnum.RAGFLOW_RAGError,
             ) from e
+
+    async def _resolve_query_datasets(
+        self, repo_ids: Optional[List[str]]
+    ) -> Tuple[List[str], List[str]]:
+        """Resolve RAGFlow dataset_ids from repo_ids; return (found, missing)."""
+        if not repo_ids:
+            default_name = RagflowUtils.get_default_dataset_name()
+            ds_id = await RagflowUtils.get_dataset_id_by_name(default_name)
+            return ([ds_id] if ds_id else [], [])
+
+        # Concurrent lookup: multi-repo query latency = 1 × RTT, not N × RTT.
+        results = await asyncio.gather(
+            *(RagflowUtils.get_dataset_id_by_name(rid) for rid in repo_ids)
+        )
+        dataset_ids: List[str] = []
+        missing: List[str] = []
+        for repo_id, ds_id in zip(repo_ids, results):
+            if ds_id:
+                dataset_ids.append(ds_id)
+            else:
+                missing.append(repo_id)
+        return (dataset_ids, missing)
+
+    def _build_retrieval_payload(
+        self,
+        query: str,
+        dataset_ids: List[str],
+        doc_ids: Optional[List[str]],
+        top_k: int,
+        threshold: float,
+        ext: Optional[RagflowQueryExt],
+    ) -> Dict[str, Any]:
+        """Build the RAGFlow ``/retrieval`` request body."""
+        payload: Dict[str, Any] = {
+            "question": query,
+            "dataset_ids": dataset_ids,
+            "top_k": top_k,
+            "similarity_threshold": threshold,
+            "vector_similarity_weight": 0.2,
+        }
+        if doc_ids:
+            payload["document_ids"] = doc_ids
+        if ext is not None:
+            self._apply_ragflow_ext(payload, ext)
+        return payload
+
+    def _apply_ragflow_ext(self, payload: Dict[str, Any], ext: RagflowQueryExt) -> None:
+        """Apply optional ``RagflowQueryExt`` fields onto the payload."""
+        # NB: top_k is intentionally not applied here. query() resolves
+        # effective_top_k upstream and writes it into the payload first.
+        if ext.vector_similarity_weight is not None:
+            payload["vector_similarity_weight"] = ext.vector_similarity_weight
+        if ext.keyword is not None:
+            payload["keyword"] = ext.keyword
+        if ext.rerank_id is not None:
+            payload["rerank_id"] = ext.rerank_id
+        if ext.use_kg is not None:
+            payload["use_kg"] = ext.use_kg
+        if ext.highlight is not None:
+            # RAGFlow v0.20.5 compares ``highlight`` as a string; passing a
+            # Python bool leaves it enabled. v0.24.0 accepts bool directly —
+            # drop ``str()`` once the pinned image is >= v0.24.0.
+            payload["highlight"] = str(ext.highlight)
+
+    async def _execute_retrieval(
+        self,
+        payload: Dict[str, Any],
+        query: str,
+        threshold: float,
+        effective_top_k: int,
+    ) -> Dict[str, Any]:
+        """Call RAGFlow ``/retrieval`` and convert response."""
+        # ``ragflow_client.retrieval_with_dataset`` ignores ``dataset_id``
+        # (the underlying RAGFlow body uses ``request_data['dataset_ids']``
+        # for the actual filter). The first id is passed only to satisfy the
+        # current client signature; remove this arg once the client drops it.
+        primary_dataset_id = payload["dataset_ids"][0]
+        ragflow_response = await ragflow_client.retrieval_with_dataset(
+            dataset_id=primary_dataset_id, request_data=payload
+        )
+
+        if ragflow_response.get("code") != 0:
+            msg = ragflow_response.get("message", "Unknown error")
+            logger.error("RAGFlow query failed: %s", ragflow_response)
+            raise ThirdPartyException(
+                msg=f"RAGFlow retrieval failed: {msg}",
+                e=CodeEnum.RAGFLOW_RAGError,
+            )
+
+        results = RagflowUtils.convert_ragflow_query_response(
+            ragflow_response, threshold
+        )
+        if effective_top_k and effective_top_k > 0:
+            results = results[:effective_top_k]
+
+        logger.info("Query completed, returning %d results", len(results))
+        return {"query": query, "count": len(results), "results": results}
+
+    def _empty_query_result(self, query: str) -> Dict[str, Any]:
+        """Unified empty-result format for fail-closed query paths."""
+        return {"query": query, "count": 0, "results": []}
 
     def _validate_split_parameters(
         self, fileUrl: Optional[str], file: Optional[Any]
@@ -928,18 +977,21 @@ class RagflowRAGStrategy(RAGStrategy):
                 CodeEnum.ChunkDeleteFailed, f"Deletion operation failed: {str(e)}"
             )
 
-    async def query_doc(self, docId: str, **kwargs: Any) -> List[Dict[str, Any]]:
-        """
-        Query all chunk information for a document using RAGFlow.
-        """
+    async def query_doc(
+        self, docId: str, group: Optional[str] = None, **kwargs: Any
+    ) -> List[Dict[str, Any]]:
+        """Query all chunk information for a document using RAGFlow."""
         try:
             logger.info(f"Starting document chunk query: docId={docId}")
 
-            # Get dataset ID
-            dataset_name = RagflowUtils.get_default_dataset_name()
-            dataset_id = await RagflowUtils.get_dataset_id_by_name(dataset_name)
+            group_name = group or RagflowUtils.get_default_dataset_name()
+            dataset_id = await RagflowUtils.get_dataset_id_by_name(group_name)
             if not dataset_id:
-                logger.warning(f"Dataset not found: {dataset_name}")
+                logger.warning(
+                    "RAGFlow dataset missing for group %r "
+                    "(fail-closed: returning empty)",
+                    group_name,
+                )
                 return []
 
             # Step 1: Get total count
@@ -1011,19 +1063,20 @@ class RagflowRAGStrategy(RAGStrategy):
             ) from e
 
     async def query_doc_name(
-        self, docId: str, **kwargs: Any
+        self, docId: str, group: Optional[str] = None, **kwargs: Any
     ) -> Optional[Dict[str, Any]]:
-        """
-        Query document name and information using RAGFlow.
-        """
+        """Query document name and information using RAGFlow."""
         try:
             logger.info(f"Starting document info query: docId={docId}")
 
-            # Get dataset ID
-            dataset_name = RagflowUtils.get_default_dataset_name()
-            dataset_id = await RagflowUtils.get_dataset_id_by_name(dataset_name)
+            group_name = group or RagflowUtils.get_default_dataset_name()
+            dataset_id = await RagflowUtils.get_dataset_id_by_name(group_name)
             if not dataset_id:
-                logger.warning(f"Dataset not found: {dataset_name}")
+                logger.warning(
+                    "RAGFlow dataset missing for group %r "
+                    "(fail-closed: returning None)",
+                    group_name,
+                )
                 return None
 
             # Get document information
