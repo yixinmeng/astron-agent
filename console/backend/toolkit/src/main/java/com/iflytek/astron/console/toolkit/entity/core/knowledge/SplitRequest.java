@@ -54,13 +54,13 @@ public class SplitRequest {
      * RAGFlow dataset group (coreRepoId for Ragflow-RAG). Optional; null falls back to the default
      * group.
      */
-    private String group;
+    String group;
 
     /**
      * Human-readable label written into the RAGFlow dataset description on first creation. Helps
      * operators identify the dataset in the RAGFlow UI without resolving UUIDs.
      */
-    private String groupDescription;
+    String groupDescription;
 
     // Default to AIUI value
     public SplitRequest() {

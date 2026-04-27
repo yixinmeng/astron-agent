@@ -31,7 +31,7 @@ public class KnowledgeV2ServiceCallHandler {
      * @param request the split request describing the document
      * @param coreRepoId Ragflow-RAG dataset name/group; forwarded as {@code group} so the upstream
      *        service can resolve the matching dataset. Ignored for non-Ragflow-RAG sources to keep
-     *        CBG/AIUI/Spark behaviour intact.
+     *        CBG/AIUI/Spark behavior intact.
      * @param repoName human-readable repo display name; written into RAGFlow dataset description on
      *        first lazy creation. Pass {@code null} to skip.
      * @return knowledge response from the upstream split API
@@ -59,7 +59,7 @@ public class KnowledgeV2ServiceCallHandler {
      * @param oldDocId existing RAGFlow doc id for upsert; null for first slice
      * @param coreRepoId Ragflow-RAG dataset name/group; forwarded as {@code group} so the upstream
      *        service can resolve the matching dataset. Ignored for non-Ragflow-RAG sources to keep
-     *        CBG/AIUI/Spark behaviour intact.
+     *        CBG/AIUI/Spark behavior intact.
      * @param repoName human-readable repo display name; written into RAGFlow dataset description on
      *        first lazy creation. Pass {@code null} to skip.
      * @return KnowledgeResponse

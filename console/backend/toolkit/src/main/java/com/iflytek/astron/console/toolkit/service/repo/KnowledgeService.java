@@ -568,7 +568,7 @@ public class KnowledgeService {
     /**
      * Returns the {@code coreRepoId} for Ragflow-RAG, or {@code null} for other sources.
      *
-     * @throws IllegalStateException if Ragflow-RAG and {@code repoId} or {@code coreRepoId} is missing.
+     * @throws BusinessException if Ragflow-RAG and {@code repoId} or {@code coreRepoId} is missing.
      */
     private String resolveCoreRepoIdForRagflow(FileInfoV2 fileInfoV2) {
         Repo repo = loadRagflowRepoOrNull(fileInfoV2);
@@ -582,7 +582,7 @@ public class KnowledgeService {
                 request.setGroup(coreRepoId);
             }
             return true;
-        } catch (IllegalStateException e) {
+        } catch (BusinessException e) {
             log.warn("Skip Ragflow-RAG delete because repo metadata is invalid. fileId={}, uuid={}, reason={}",
                     fileInfoV2.getId(), fileInfoV2.getUuid(), e.getMessage());
             return false;
@@ -593,8 +593,8 @@ public class KnowledgeService {
      * Loads the {@link Repo} for a Ragflow-RAG document; returns {@code null} for other sources.
      * Callers read both {@code coreRepoId} and {@code name} from the result with one DB query.
      *
-     * @throws IllegalStateException if Ragflow-RAG and {@code repoId} / {@link Repo} /
-     *         {@code coreRepoId} is missing.
+     * @throws BusinessException if Ragflow-RAG and {@code repoId} / {@link Repo} / {@code coreRepoId}
+     *         is missing.
      */
     private Repo loadRagflowRepoOrNull(FileInfoV2 fileInfoV2) {
         if (!ProjectContent.FILE_SOURCE_RAG_FLOW_RAG_STR.equals(fileInfoV2.getSource())) {
@@ -602,16 +602,18 @@ public class KnowledgeService {
         }
         Long repoId = fileInfoV2.getRepoId();
         if (repoId == null) {
-            throw new IllegalStateException(
-                    "Ragflow-RAG upload/split requires repoId on FileInfoV2 id="
-                            + fileInfoV2.getId());
+            log.error("Ragflow-RAG upload/split requires repoId on FileInfoV2 id={}",
+                    fileInfoV2.getId());
+            throw new BusinessException(ResponseEnum.REPO_STATUS_ILLEGAL);
         }
         Repo repo = repoService.getById(repoId);
         if (repo == null) {
-            throw new IllegalStateException("Repo not found for repoId=" + repoId);
+            log.error("Repo not found for repoId={}", repoId);
+            throw new BusinessException(ResponseEnum.REPO_STATUS_ILLEGAL);
         }
         if (!StringUtils.isNotBlank(repo.getCoreRepoId())) {
-            throw new IllegalStateException("Repo " + repoId + " has no coreRepoId");
+            log.error("Repo {} has no coreRepoId", repoId);
+            throw new BusinessException(ResponseEnum.REPO_STATUS_ILLEGAL);
         }
         return repo;
     }

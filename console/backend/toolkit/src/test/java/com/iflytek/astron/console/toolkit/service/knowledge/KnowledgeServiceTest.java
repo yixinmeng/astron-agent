@@ -1865,7 +1865,7 @@ class KnowledgeServiceTest {
             // Then
             verify(s3Util, times(1)).getObject(anyString());
             // CBG-RAG multipart form must not carry documentId; coreRepoId is
-            // null because CBG-RAG keeps the legacy single-dataset behaviour.
+            // null because CBG-RAG keeps the legacy single-dataset behavior.
             verify(knowledgeV2ServiceCallHandler, times(1)).documentUpload(
                     any(), any(), any(), any(), any(), isNull(), isNull(), isNull());
         }
@@ -2307,10 +2307,10 @@ class KnowledgeServiceTest {
             file.setSource("Ragflow-RAG");
             file.setRepoId(null);
             file.setId(99L);
-            IllegalStateException ex = assertThrows(IllegalStateException.class,
+            BusinessException ex = assertThrows(BusinessException.class,
                     () -> ReflectionTestUtils.invokeMethod(
                             knowledgeService, "resolveCoreRepoIdForRagflow", file));
-            assertThat(ex.getMessage()).contains("requires repoId");
+            assertThat(ex.getResponseEnum()).isEqualTo(ResponseEnum.REPO_STATUS_ILLEGAL);
         }
 
         @Test
@@ -2320,10 +2320,10 @@ class KnowledgeServiceTest {
             file.setSource("Ragflow-RAG");
             file.setRepoId(42L);
             when(repoService.getById(42L)).thenReturn(null);
-            IllegalStateException ex = assertThrows(IllegalStateException.class,
+            BusinessException ex = assertThrows(BusinessException.class,
                     () -> ReflectionTestUtils.invokeMethod(
                             knowledgeService, "resolveCoreRepoIdForRagflow", file));
-            assertThat(ex.getMessage()).contains("Repo not found");
+            assertThat(ex.getResponseEnum()).isEqualTo(ResponseEnum.REPO_STATUS_ILLEGAL);
         }
 
         @Test
@@ -2335,10 +2335,10 @@ class KnowledgeServiceTest {
             Repo repo = new Repo();
             repo.setCoreRepoId(null);
             when(repoService.getById(42L)).thenReturn(repo);
-            IllegalStateException ex = assertThrows(IllegalStateException.class,
+            BusinessException ex = assertThrows(BusinessException.class,
                     () -> ReflectionTestUtils.invokeMethod(
                             knowledgeService, "resolveCoreRepoIdForRagflow", file));
-            assertThat(ex.getMessage()).contains("no coreRepoId");
+            assertThat(ex.getResponseEnum()).isEqualTo(ResponseEnum.REPO_STATUS_ILLEGAL);
         }
 
         @Test
