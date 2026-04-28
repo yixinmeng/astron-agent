@@ -456,6 +456,19 @@ async def create_dataset(name: str, **kwargs: Any) -> Dict[str, Any]:
     return await _make_request("POST", "/api/v1/datasets", data=data)
 
 
+async def update_dataset(dataset_id: str, **kwargs: Any) -> Dict[str, Any]:
+    """Update dataset metadata via RAGFlow PUT /api/v1/datasets/{id}.
+
+    Args:
+        dataset_id: Dataset ID to update.
+        **kwargs: Fields to patch (description, name, embedding_model, ...).
+
+    Returns:
+        Update response from RAGFlow.
+    """
+    return await _make_request("PUT", f"/api/v1/datasets/{dataset_id}", data=kwargs)
+
+
 # ==================== Document Management APIs ====================
 
 
