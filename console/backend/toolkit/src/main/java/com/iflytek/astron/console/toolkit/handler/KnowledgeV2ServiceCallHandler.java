@@ -48,22 +48,28 @@ public class KnowledgeV2ServiceCallHandler {
             String msg = (parsed == null) ? "blank response" : parsed.getMessage();
             throw new BusinessException(ResponseEnum.REPO_CREATE_RAGFLOW_FAILED, msg);
         }
-        Object data = parsed.getData();
-        JSONObject dataObj;
-        if (data instanceof JSONObject) {
-            dataObj = (JSONObject) data;
-        } else if (data instanceof String) {
-            dataObj = JSON.parseObject((String) data);
-        } else {
-            throw new BusinessException(ResponseEnum.REPO_CREATE_RAGFLOW_FAILED,
-                    "RAGFlow returned non-object data");
-        }
+        return extractDatasetId(parsed.getData());
+    }
+
+    private String extractDatasetId(Object data) {
+        JSONObject dataObj = toJsonObject(data);
         String datasetId = dataObj == null ? null : dataObj.getString(DATASET_ID_FIELD);
         if (StringUtils.isBlank(datasetId)) {
             throw new BusinessException(ResponseEnum.REPO_CREATE_RAGFLOW_FAILED,
                     "RAGFlow returned blank datasetId");
         }
         return datasetId;
+    }
+
+    private JSONObject toJsonObject(Object data) {
+        if (data instanceof JSONObject) {
+            return (JSONObject) data;
+        }
+        if (data instanceof String) {
+            return JSON.parseObject((String) data);
+        }
+        throw new BusinessException(ResponseEnum.REPO_CREATE_RAGFLOW_FAILED,
+                "RAGFlow returned non-object data");
     }
 
     /**
